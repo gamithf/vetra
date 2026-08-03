@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
+    GROQ_TRANSCRIBE_API_KEY: str = os.getenv("GROQ_TRANSCRIBE_API_KEY", "")
+    GROQ_WHISPER_MODEL: str = "whisper-large-v3"
+
     class Config:
         case_sensitive = True
 

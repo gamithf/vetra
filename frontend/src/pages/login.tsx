@@ -3,12 +3,11 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { PawPrint, Eye, EyeOff, Loader2, Sparkles, UserCog, Stethoscope } from 'lucide-react'
+import { PawPrint, Eye, EyeOff, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAuth } from '@/context/auth-context'
-import { isDemo } from '@/lib/demo'
 import { toast } from 'sonner'
 
 const loginSchema = z.object({
@@ -23,20 +22,6 @@ export function LoginPage() {
   const { login } = useAuth()
   const [showPassword, setShowPassword] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [demoLogin, setDemoLogin] = useState<string | null>(null)
-
-  const quickLogin = async (email: string) => {
-    setDemoLogin(email)
-    try {
-      await login({ email, password: 'password123' })
-      toast.success('Welcome back!')
-      navigate('/')
-    } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Invalid credentials')
-    } finally {
-      setDemoLogin(null)
-    }
-  }
 
   const {
     register,
@@ -128,25 +113,7 @@ export function LoginPage() {
             </Button>
           </form>
 
-          {isDemo() && (
-            <div className="mt-6 space-y-2 rounded-xl border border-violet-200 bg-violet-50/50 p-3">
-              <div className="flex items-center gap-1.5 text-xs font-semibold text-violet-700">
-                <Sparkles size={12} /> Demo Mode — one-click access
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <Button variant="outline" size="sm" className="gap-1.5" onClick={() => quickLogin('staff1@vetra.com')} disabled={!!demoLogin}>
-                  {demoLogin === 'staff1@vetra.com' ? <Loader2 size={14} className="animate-spin" /> : <UserCog size={14} />}
-                  Staff
-                </Button>
-                <Button variant="outline" size="sm" className="gap-1.5" onClick={() => quickLogin('vet1@vetra.com')} disabled={!!demoLogin}>
-                  {demoLogin === 'vet1@vetra.com' ? <Loader2 size={14} className="animate-spin" /> : <Stethoscope size={14} />}
-                  Vet
-                </Button>
-              </div>
-            </div>
-          )}
-
-          <p className="mt-4 text-center text-sm text-muted-foreground">
+          <p className="mt-6 text-center text-sm text-muted-foreground">
             Don&apos;t have an account?{' '}
             <Link to="/register" className="font-medium text-primary hover:underline">
               Create one

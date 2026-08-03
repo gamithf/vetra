@@ -80,6 +80,22 @@ async def get_today_appointments(
     return [AppointmentResponse.model_validate(a) for a in appointments]
 
 
+@router.get("/pending-checkout", response_model=list[AppointmentResponse])
+async def pending_checkout(
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    subquery = select(Invoice.appointment_id).where(Invoice.appointment_id.isnot(None))
+    result = await session.execute(
+        select(Appointment)
+        .where(Appointment.status == AppointmentStatus.COMPLETED)
+        .where(Appointment.id.notin_(subquery))
+        .order_by(Appointment.end_time.desc())
+    )
+    appointments = result.scalars().all()
+    return [AppointmentResponse.model_validate(a) for a in appointments]
+
+
 @router.get("/{appointment_id}", response_model=AppointmentResponse)
 async def get_appointment(
     appointment_id: uuid.UUID,
@@ -261,25 +277,20 @@ async def complete_appointment(
     return AppointmentResponse.model_validate(appointment)
 
 
-@router.get("/pending-checkout", response_model=list[AppointmentResponse])
-async def pending_checkout(
-    session: AsyncSession = Depends(get_session),
-    current_user: User = Depends(get_current_user),
-):
-    subquery = select(Invoice.appointment_id).where(Invoice.appointment_id.isnot(None))
-    result = await session.execute(
-        select(Appointment)
-        .where(Appointment.status == AppointmentStatus.COMPLETED)
-        .where(Appointment.id.notin_(subquery))
-        .order_by(Appointment.end_time.desc())
-    )
-    appointments = result.scalars().all()
-    return [AppointmentResponse.model_validate(a) for a in appointments]
+class InvoiceItemPayload(BaseModel):
+    description: str
+    quantity: int = 1
+    unit_price: float
+
+
+class CreateInvoicePayload(BaseModel):
+    items: list[InvoiceItemPayload] | None = None
 
 
 @router.post("/{appointment_id}/create-invoice", response_model=InvoiceWithItemsResponse)
 async def create_invoice_for_appointment(
     appointment_id: uuid.UUID,
+    body: CreateInvoicePayload | None = None,
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
@@ -309,13 +320,15 @@ async def create_invoice_for_appointment(
     session.add(invoice)
     await session.flush()
 
-    default_items = [
-        {"description": "Consultation Fee", "quantity": 1, "unit_price": 45.00},
-        {"description": "Examination Fee", "quantity": 1, "unit_price": 35.00},
-    ]
-
-    if appointment.is_urgent:
-        default_items.append({"description": "Emergency Surcharge", "quantity": 1, "unit_price": 50.00})
+    if body and body.items:
+        default_items = [item.model_dump() for item in body.items]
+    else:
+        default_items = [
+            {"description": "Consultation Fee", "quantity": 1, "unit_price": 45.00},
+            {"description": "Examination Fee", "quantity": 1, "unit_price": 35.00},
+        ]
+        if appointment.is_urgent:
+            default_items.append({"description": "Emergency Surcharge", "quantity": 1, "unit_price": 50.00})
 
     total = 0
     items = []

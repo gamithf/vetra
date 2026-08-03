@@ -8,6 +8,9 @@ class ClinicalNoteCreate(BaseModel):
     pet_id: uuid.UUID
     appointment_id: uuid.UUID
     raw_transcript: str
+    structured_note: str | None = None
+    ai_model_version: str | None = None
+    status: ClinicalNoteStatus | None = None
 
 
 class ClinicalNoteUpdate(BaseModel):
