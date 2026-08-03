@@ -22,7 +22,7 @@ class VetraTools:
         return {"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"}
 
     async def _call(self, method: str, path: str, **kwargs):
-        async with httpx.AsyncClient(timeout=120) as client:
+        async with httpx.AsyncClient(timeout=120, follow_redirects=True) as client:
             resp = await client.request(
                 method, f"{self.base}{path}", headers=self._headers(), **kwargs
             )
@@ -56,6 +56,15 @@ class VetraTools:
             f"/appointments/{appointment_id}/create-invoice",
             json={"items": items},
         )
+
+    async def get_invoice_for_appointment(self, appointment_id: str) -> dict | None:
+        """Return the existing invoice for an appointment, or None if none exists."""
+        try:
+            return await self._call("GET", f"/invoices/by-appointment/{appointment_id}")
+        except VetraAPIError as exc:
+            if "404" in str(exc):
+                return None
+            raise
 
     async def complete_appointment(self, appointment_id: str) -> dict:
         return await self._call("POST", f"/appointments/{appointment_id}/complete")

@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   Clock, AlertTriangle, Activity, Weight, Syringe, Beaker, FileText,
-  ChevronRight, PawPrint, Loader2, CheckCircle2, Pill, Calendar,
-  PlayCircle, RefreshCw,
+  ChevronRight, PawPrint, CheckCircle2, Pill, Calendar,
+  RefreshCw,
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -11,6 +11,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import type { Appointment, Pet, MedicalRecord, VetDashboard } from '@/lib/api'
 import { appointmentsApi, dashboardApi, petsApi } from '@/lib/api'
+import { WS_URL } from '@/lib/constants'
 import { CopilotWidget } from '@/components/copilot-widget'
 import { useAuth } from '@/context/auth-context'
 import { toast } from 'sonner'
@@ -59,6 +60,7 @@ function AppointmentCard({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span className="truncate font-semibold">{petName}</span>
+          <span className="text-xs text-muted-foreground">#{appointment.pet_id.slice(0, 6)}</span>
           {appointment.is_urgent && (
             <Badge variant="destructive" className="gap-1 px-1.5 py-0 text-[10px]">
               <AlertTriangle size={10} /> URGENT
@@ -86,7 +88,6 @@ function PatientEMR({
   const [records, setRecords] = useState<MedicalRecord[]>([])
   const [pet, setPet] = useState<Pet | null>(null)
   const [loading, setLoading] = useState(true)
-  const [actionLoading, setActionLoading] = useState<string | null>(null)
 
   const load = useCallback(() => {
     setLoading(true)
@@ -100,28 +101,6 @@ function PatientEMR({
   }, [petId])
 
   useEffect(() => { load() }, [load])
-
-  const handleStart = async () => {
-    if (!appointment) return
-    setActionLoading('start')
-    try {
-      await appointmentsApi.start(appointment.id)
-      toast.success('Appointment started')
-      onRefresh()
-    } catch { toast.error('Failed to start') }
-    finally { setActionLoading(null) }
-  }
-
-  const handleComplete = async () => {
-    if (!appointment) return
-    setActionLoading('complete')
-    try {
-      await appointmentsApi.complete(appointment.id)
-      toast.success('Appointment completed — Submit notes to finalize')
-      onRefresh()
-    } catch { toast.error('Failed to complete') }
-    finally { setActionLoading(null) }
-  }
 
   if (loading) return <Spinner className="py-20" />
 
@@ -154,18 +133,12 @@ function PatientEMR({
                 {pet.weight_kg ? ` · ${pet.weight_kg} kg` : ''}
               </CardDescription>
             </div>
-            <div className="flex gap-2">
-              {appointment?.status === 'checked_in' && (
-                <Button size="sm" onClick={handleStart} disabled={actionLoading === 'start'} className="gap-1.5">
-                  {actionLoading === 'start' ? <Loader2 size={14} className="animate-spin" /> : <PlayCircle size={14} />}
-                  Start Exam
-                </Button>
-              )}
-              {appointment?.status === 'in_progress' && (
-                <Button size="sm" variant="outline" onClick={handleComplete} disabled={actionLoading === 'complete'} className="gap-1.5">
-                  {actionLoading === 'complete' ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
-                  Complete
-                </Button>
+            <div className="flex items-center gap-2">
+              {appointment && (
+                <span className={cn('flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium', statusConfig[appointment.status]?.color || 'bg-muted text-muted-foreground')}>
+                  <span className={cn('h-1.5 w-1.5 rounded-full', statusConfig[appointment.status]?.dot || 'bg-muted-foreground')} />
+                  {statusConfig[appointment.status]?.label || appointment.status}
+                </span>
               )}
             </div>
           </div>
@@ -260,6 +233,20 @@ export function VetDashboard() {
 
   useEffect(() => { load() }, [load])
 
+  // Live updates: the vet's queue refreshes the moment staff checks a patient in.
+  useEffect(() => {
+    const ws = new WebSocket(WS_URL)
+    ws.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data)
+        if (msg.type === 'appointment.checked_in' || msg.type === 'appointment.completed' || msg.type === 'invoice.created') {
+          load()
+        }
+      } catch { /* ignore malformed frames */ }
+    }
+    return () => ws.close()
+  }, [load])
+
   const handleNoteSubmitted = () => {
     load()
     setSelectedAppt(null)
@@ -324,7 +311,7 @@ export function VetDashboard() {
               <AppointmentCard
                 key={apt.id}
                 appointment={apt}
-                petName={petNames[apt.pet_id] || `Patient #${apt.pet_id.slice(0, 8)}`}
+                petName={petNames[apt.pet_id] || 'Patient'}
                 selected={false}
                 popIn={checkedInIds.has(apt.id)}
                 onClick={() => setSelectedAppt(apt)}

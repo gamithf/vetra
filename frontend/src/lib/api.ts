@@ -275,5 +275,3 @@ export const transcriptionApi = {
     return data
   },
 }
-
-export const agentWsUrl = import.meta.env.VITE_AGENT_URL || 'ws://localhost:8001/agent'

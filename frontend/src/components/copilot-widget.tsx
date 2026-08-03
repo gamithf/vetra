@@ -3,6 +3,8 @@ import { Mic, MicOff, Send, Loader2, ChevronDown, X, Headphones } from 'lucide-r
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { transcriptionApi } from '@/lib/api'
+import { DEMO_TRANSCRIPT } from '@/lib/constants'
+import { sleep, formatCurrency } from '@/lib/format'
 import { AgentStream, type AgentSummary } from '@/components/agent-stream'
 import { toast } from 'sonner'
 
@@ -28,12 +30,20 @@ export function CopilotWidget({ activePatientId, activePatientName, activeAppoin
   const handleTranscribe = useCallback(async (blob: Blob) => {
     setIsTranscribing(true)
     try {
-      const res = await transcriptionApi.transcribe(blob)
-      if (res.text) {
-        setTranscript(res.text)
+      if (DEMO_TRANSCRIPT) {
+        // Deterministic demo: show the exact dictated message (the narrator
+        // reads this phrase aloud during the recording).
+        await sleep(1300)
+        setTranscript(DEMO_TRANSCRIPT)
         toast.success('Transcription ready — review before submitting')
       } else {
-        toast.error('No speech detected')
+        const res = await transcriptionApi.transcribe(blob)
+        if (res.text) {
+          setTranscript(res.text)
+          toast.success('Transcription ready — review before submitting')
+        } else {
+          toast.error('No speech detected')
+        }
       }
     } catch {
       toast.error('Speech-to-text failed')
@@ -78,7 +88,7 @@ export function CopilotWidget({ activePatientId, activePatientName, activeAppoin
     setAgentOpen(false)
     toast.success('Visit complete — records, inventory & bill updated')
     if (summary.invoice_total) {
-      toast('Bill generated', { description: `$${summary.invoice_total.toFixed(2)}` })
+      toast('Bill generated', { description: formatCurrency(summary.invoice_total) })
     }
     setTranscript('')
     onNoteSubmitted()

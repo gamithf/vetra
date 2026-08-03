@@ -1,7 +1,7 @@
 """Multi-agent orchestrator.
 
 Runs the Vetra agent pipeline for one visit and streams real-time events
-(thinking traces + tool actions) to the connected client.
+(thinking traces + tool actions + per-step results) to the connected client.
 
 Agents:
   1. Context   — loads patient context
@@ -33,6 +33,10 @@ async def _think(emit, agent: str, text: str):
         await asyncio.sleep(THINK_TICK)
 
 
+def _fmt_money(amount: float) -> str:
+    return f"Rs.{amount:,.2f}"
+
+
 async def run_pipeline(emit, payload: dict):
     settings = get_settings()
     token = payload.get("token", "")
@@ -61,13 +65,23 @@ async def run_pipeline(emit, payload: dict):
         "gender": pet.get("gender", ""),
         "reason": payload.get("reason"),
     }
-    await _emit(emit, {"type": "agent", "agent": "context", "status": "complete", "detail": f"Patient loaded: {context['pet_name']}"})
+    context_line = (
+        f"Loaded {context['pet_name']} — {context['species']}"
+        + (f" ({context['breed']})" if context['breed'] else "")
+        + f", {context['gender'] or 'unknown sex'}"
+    )
+    await _emit(emit, {"type": "agent", "agent": "context", "status": "complete", "detail": context_line})
+    await _emit(emit, {"type": "result", "agent": "context", "text": context_line})
 
     # ── 2. Medical agent — live reasoning ────────────
     await _emit(emit, {"type": "agent", "agent": "medical", "status": "working", "detail": "Analyzing the consultation..."})
+    analysis_parts = []
     async for chunk in gemini.stream_analysis(context):
+        analysis_parts.append(chunk)
         await _think(emit, "medical", chunk)
+    analysis_text = "".join(analysis_parts).strip()
     await _emit(emit, {"type": "agent", "agent": "medical", "status": "complete", "detail": "Analysis complete"})
+    await _emit(emit, {"type": "result", "agent": "medical", "text": analysis_text or "No analysis produced."})
 
     # ── 3. Structured plan (single coordinated decision) ──
     plan: VisitPlan = await gemini.plan_visit(context)
@@ -83,7 +97,10 @@ async def run_pipeline(emit, payload: dict):
         "status": "completed",
     }
     note = await tools.save_clinical_note(note_payload)
-    await _emit(emit, {"type": "agent", "agent": "notes", "status": "complete", "detail": "Clinical note saved"})
+    note_id = note.get("note", {}).get("id") or note.get("id")
+    note_text = f"Clinical note saved — SOAP note written for {context['pet_name']} (id {str(note_id)[:8]})"
+    await _emit(emit, {"type": "agent", "agent": "notes", "status": "complete", "detail": note_text})
+    await _emit(emit, {"type": "result", "agent": "notes", "text": note_text + "\n\n" + (plan.structured_note or "") + "\n\nRAW TRANSCRIPT:\n" + transcript})
 
     # ── 5. Records agent — write the medical record ──
     await _emit(emit, {"type": "agent", "agent": "records", "status": "thinking", "detail": "Writing the medical record..."})
@@ -97,21 +114,33 @@ async def run_pipeline(emit, payload: dict):
         "notes": plan.structured_note[:2000],
     }
     record = await tools.create_medical_record(record_payload)
+    record_text = (
+        f"Record created — type: {plan.record_type}\n"
+        f"Diagnosis: {plan.diagnosis}\n"
+        f"Treatment: {plan.treatment}"
+    )
     await _emit(emit, {"type": "agent", "agent": "records", "status": "complete", "detail": f"Diagnosis: {plan.diagnosis}"})
+    await _emit(emit, {"type": "result", "agent": "records", "text": record_text})
 
     # ── 6. Inventory agent — reconcile consumed items ──
     inventory = await tools.list_inventory()
     inventory_log = []
+    inventory_lines = []
     for used in plan.inventory:
         item = VetraTools.match_inventory_item(inventory, used.item_name)
         if not item:
-            await _emit(emit, {"type": "agent", "agent": "inventory", "status": "thinking", "detail": f"No stock match for \"{used.item_name}\" — skipping"})
+            line = f"No stock match for \"{used.item_name}\" — skipped"
+            await _emit(emit, {"type": "agent", "agent": "inventory", "status": "thinking", "detail": line})
+            inventory_lines.append(line)
             continue
         qty = max(1, int(used.quantity))
         await _emit(emit, {"type": "agent", "agent": "inventory", "status": "thinking", "detail": f"Consuming {qty} × {item['name']}..."})
         await tools.adjust_inventory(item["id"], -qty)
         inventory_log.append(f"{item['name']}: -{qty}")
+        inventory_lines.append(f"Consumed {qty} × {item['name']} — new stock {int(item['quantity']) - qty}")
+    inv_summary = "\n".join(inventory_lines) if inventory_lines else "No inventory changes for this visit."
     await _emit(emit, {"type": "agent", "agent": "inventory", "status": "complete", "detail": "Inventory updated" if inventory_log else "No inventory changes"})
+    await _emit(emit, {"type": "result", "agent": "inventory", "text": inv_summary})
 
     # ── 7. Billing agent — generate invoice ──
     await _emit(emit, {"type": "agent", "agent": "billing", "status": "thinking", "detail": "Calculating line items..."})
@@ -119,14 +148,24 @@ async def run_pipeline(emit, payload: dict):
         {"description": it.description, "quantity": it.quantity, "unit_price": it.unit_price}
         for it in plan.invoice_items
     ]
-    invoice = await tools.create_invoice(appointment_id, invoice_items)
+    # Idempotent: reuse an existing invoice (e.g. from a prior partial run) so a
+    # re-run of the pipeline never fails with "Invoice already exists".
+    invoice = await tools.get_invoice_for_appointment(appointment_id)
+    if invoice is None:
+        invoice = await tools.create_invoice(appointment_id, invoice_items)
     total = invoice.get("total_amount", 0)
-    await _emit(emit, {"type": "agent", "agent": "billing", "status": "complete", "detail": f"Bill generated: ${total:.2f}"})
+    bill_lines = [f"{it.description} ×{it.quantity} — {_fmt_money(it.quantity * it.unit_price)}" for it in plan.invoice_items]
+    bill_lines.append(f"Total: {_fmt_money(total)}")
+    bill_text = "\n".join(bill_lines)
+    await _emit(emit, {"type": "agent", "agent": "billing", "status": "complete", "detail": f"Bill generated: {_fmt_money(total)}"})
+    await _emit(emit, {"type": "result", "agent": "billing", "text": bill_text})
 
     # ── 8. Finalize agent ────────────────────────────
     await _emit(emit, {"type": "agent", "agent": "finalize", "status": "working", "detail": "Marking the visit complete..."})
     await tools.complete_appointment(appointment_id)
+    finalize_text = f"Appointment completed — {context['pet_name']} is ready for checkout."
     await _emit(emit, {"type": "agent", "agent": "finalize", "status": "complete", "detail": "Appointment completed"})
+    await _emit(emit, {"type": "result", "agent": "finalize", "text": finalize_text})
 
     await _emit(emit, {
         "type": "done",
@@ -134,7 +173,7 @@ async def run_pipeline(emit, payload: dict):
             "diagnosis": plan.diagnosis,
             "treatment": plan.treatment,
             "record_id": record.get("id"),
-            "note_id": note.get("id"),
+            "note_id": note_id,
             "invoice_total": total,
             "inventory_log": inventory_log,
         },
