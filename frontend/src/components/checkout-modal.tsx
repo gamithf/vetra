@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import type { Appointment, InvoiceWithItems } from '@/lib/api'
-import { useApi } from '@/lib/use-api'
+import { appointmentsApi, invoicesApi } from '@/lib/api'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 
@@ -23,7 +23,6 @@ const paymentMethods = [
 ]
 
 export function CheckoutModal({ appointment, open, onClose, onSuccess }: Props) {
-  const { appointmentsApi, invoicesApi } = useApi()
   const [invoice, setInvoice] = useState<InvoiceWithItems | null>(null)
   const [loading, setLoading] = useState(false)
   const [paying, setPaying] = useState(false)

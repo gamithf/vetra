@@ -1,6 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react'
-import type { User, LoginPayload, RegisterPayload } from '@/lib/api'
-import { useApi } from '@/lib/use-api'
+import { authApi, type User, type LoginPayload, type RegisterPayload } from '@/lib/api'
 
 interface AuthContextType {
   user: User | null
@@ -14,7 +13,6 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const { authApi } = useApi()
   const [user, setUser] = useState<User | null>(() => {
     const stored = localStorage.getItem('vetra_user')
     return stored ? JSON.parse(stored) : null

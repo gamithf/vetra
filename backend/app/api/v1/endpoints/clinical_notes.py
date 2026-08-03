@@ -1,5 +1,4 @@
 import uuid
-from datetime import datetime, timezone
 from fastapi import APIRouter, Depends
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import select
@@ -7,8 +6,7 @@ from app.database import get_session
 from app.api.deps import get_current_user
 from app.core.exceptions import NotFoundError, BadRequestError
 from app.models.clinical_note import ClinicalNote, ClinicalNoteStatus
-from app.models.medical_record import MedicalRecord, RecordType
-from app.models.appointment import Appointment, AppointmentStatus
+from app.models.appointment import Appointment
 from app.models.user import User
 from app.schemas.clinical_note import (
     ClinicalNoteCreate,
@@ -22,8 +20,6 @@ router = APIRouter(prefix="/clinical-notes", tags=["clinical-notes"])
 
 class SubmitNoteResponse(BaseModel):
     note: ClinicalNoteResponse
-    appointment_status: str
-    medical_record_id: str | None = None
     message: str
 
 
@@ -80,35 +76,17 @@ async def create_clinical_note(
         appointment_id=body.appointment_id,
         raw_transcript=body.raw_transcript,
         vet_id=current_user.id,
-        status=ClinicalNoteStatus.COMPLETED,
-        ai_model_version="manual-entry",
+        structured_note=body.structured_note,
+        ai_model_version=body.ai_model_version or "manual-entry",
+        status=body.status or ClinicalNoteStatus.COMPLETED,
     )
     session.add(note)
-    await session.flush()
-
-    med_record = MedicalRecord(
-        pet_id=body.pet_id,
-        vet_id=current_user.id,
-        appointment_id=body.appointment_id,
-        record_type=RecordType.EXAMINATION,
-        diagnosis="See clinical notes",
-        treatment="See clinical notes",
-        notes=body.raw_transcript[:2000],
-        recorded_at=datetime.now(timezone.utc),
-    )
-    session.add(med_record)
-    await session.flush()
-
-    appointment.status = AppointmentStatus.COMPLETED
-    session.add(appointment)
     await session.commit()
     await session.refresh(note)
 
     return SubmitNoteResponse(
         note=ClinicalNoteResponse.model_validate(note),
-        appointment_status=appointment.status.value,
-        medical_record_id=str(med_record.id),
-        message="Note recorded, medical entry created, appointment marked complete.",
+        message="Clinical note saved.",
     )
 
 

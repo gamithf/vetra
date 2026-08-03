@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import type { Appointment, InventoryItem, StaffDashboard } from '@/lib/api'
-import { useApi } from '@/lib/use-api'
+import { appointmentsApi, inventoryApi, dashboardApi } from '@/lib/api'
 import { EmergencyIntakeModal } from '@/components/emergency-intake-modal'
 import { CheckoutModal } from '@/components/checkout-modal'
 import { useAuth } from '@/context/auth-context'
@@ -38,16 +38,20 @@ function formatDate(d: string, pattern: string): string {
   const min = date.getMinutes().toString().padStart(2, '0')
   const h12 = h % 12 || 12
   const ampm = h >= 12 ? 'PM' : 'AM'
-  return pattern
-    .replace('yyyy-MM-dd', `${y}-${(mm + 1).toString().padStart(2, '0')}-${dd.toString().padStart(2, '0')}`)
-    .replace('h:mm a', `${h12}:${min} ${ampm}`)
-    .replace('h:mm', `${h12}:${min}`)
-    .replace('MMM d', `${months[mm]} ${dd}`)
-    .replace('EEEE, MMMM d, yyyy', `${days[date.getDay()]}, ${['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][mm]} ${dd}, ${y}`)
+  // Longest/most-specific tokens must be replaced first so shorter
+  // substrings (e.g. 'MMM d' inside 'MMMM d') don't corrupt the result.
+  let out = pattern
+  out = out.replace('EEEE, MMMM d, yyyy', `${days[date.getDay()]}, ${['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][mm]} ${dd}, ${y}`)
+  out = out.replace('MMMM d, yyyy', `${['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][mm]} ${dd}, ${y}`)
+  out = out.replace('MMMM d', `${['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][mm]} ${dd}`)
+  out = out.replace('yyyy-MM-dd', `${y}-${(mm + 1).toString().padStart(2, '0')}-${dd.toString().padStart(2, '0')}`)
+  out = out.replace('h:mm a', `${h12}:${min} ${ampm}`)
+  out = out.replace('h:mm', `${h12}:${min}`)
+  out = out.replace('MMM d', `${months[mm]} ${dd}`)
+  return out
 }
 
 function CalendarView() {
-  const { appointmentsApi } = useApi()
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [loading, setLoading] = useState(true)
   useEffect(() => {
@@ -97,7 +101,6 @@ function CalendarView() {
 }
 
 function InventoryView() {
-  const { inventoryApi } = useApi()
   const [items, setItems] = useState<InventoryItem[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -161,7 +164,6 @@ function InventoryView() {
 }
 
 export function StaffDashboard() {
-  const { appointmentsApi, dashboardApi } = useApi()
   const [searchParams] = useSearchParams()
   const tab = searchParams.get('tab') || 'overview'
   const [dashData, setDashData] = useState<StaffDashboard>({ today_appointments: 0, low_stock_items: 0, pending_invoices: 0, checked_in_patients: 0 })
