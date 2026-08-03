@@ -388,7 +388,7 @@ export function StaffDashboard() {
               Pending Checkout ({pendingCheckout.length})
             </h3>
             {pendingCheckout.length === 0 ? (
-              <Card><CardContent className="flex flex-col items-center py-12"><DollarSign size={40} className="mb-3 text-muted-foreground/30" /><p className="font-medium">No pending checkouts</p><p className="text-sm text-muted-foreground">All completed appointments have been invoiced</p></CardContent></Card>
+              <Card><CardContent className="flex flex-col items-center py-12"><DollarSign size={40} className="mb-3 text-muted-foreground/30" /><p className="font-medium">No pending checkouts</p><p className="text-sm text-muted-foreground">All completed visits have been paid</p></CardContent></Card>
             ) : (
               <Table>
                 <TableHeader>

@@ -29,6 +29,8 @@ class VetraTools:
         if resp.status_code >= 400:
             detail = resp.text[:400] if resp.text else resp.status_code
             raise VetraAPIError(f"Vetra API {method} {path} -> {resp.status_code}: {detail}")
+        if not resp.content:
+            return {}
         return resp.json()
 
     async def get_pet(self, pet_id: str) -> dict:

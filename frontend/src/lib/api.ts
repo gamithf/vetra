@@ -261,6 +261,8 @@ export const invoicesApi = {
   pay: (id: string, data: { payment_method: string }) =>
     api.post<Invoice>(`/invoices/${id}/pay`, data).then(r => r.data),
   get: (id: string) => api.get<InvoiceWithItems>(`/invoices/${id}`).then(r => r.data),
+  getByAppointment: (appointmentId: string) =>
+    api.get<InvoiceWithItems>(`/invoices/by-appointment/${appointmentId}`).then(r => r.data),
 }
 
 export const transcriptionApi = {

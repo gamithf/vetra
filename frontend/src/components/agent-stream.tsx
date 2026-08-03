@@ -111,6 +111,8 @@ export function AgentStream({ open, transcript, petId, appointmentId, appointmen
   const done = summary !== null
   const currentDetail = currentAgent ? details[currentAgent] : null
 
+  if (!open) return null
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="flex w-full max-w-2xl flex-col overflow-hidden rounded-2xl border bg-card shadow-2xl">

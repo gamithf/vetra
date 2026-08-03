@@ -85,7 +85,12 @@ async def pending_checkout(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    subquery = select(Invoice.appointment_id).where(Invoice.appointment_id.isnot(None))
+    # Completed visits that still need payment: either no invoice yet, or an
+    # invoice that is pending / partially paid.
+    subquery = select(Invoice.appointment_id).where(
+        Invoice.appointment_id.isnot(None),
+        Invoice.status.in_([InvoiceStatus.PAID, InvoiceStatus.CANCELLED, InvoiceStatus.REFUNDED]),
+    )
     result = await session.execute(
         select(Appointment)
         .where(Appointment.status == AppointmentStatus.COMPLETED)

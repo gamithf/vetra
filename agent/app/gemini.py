@@ -101,12 +101,21 @@ class GeminiClient:
             yield item
         await task
 
+    @staticmethod
+    def _strip_code_fences(text: str) -> str:
+        t = text.strip()
+        if t.startswith("```"):
+            t = t.strip("`").strip()
+            if t.lower().startswith("json"):
+                t = t[4:].strip()
+        return t
+
     async def plan_visit(self, context: dict) -> VisitPlan:
         prompt = self._plan_prompt(context)
         loop = asyncio.get_running_loop()
 
         def run():
-            resp = self.client.models.generate_content(
+            return self.client.models.generate_content(
                 model=self.model,
                 contents=prompt,
                 config={
@@ -114,7 +123,19 @@ class GeminiClient:
                     "response_schema": VisitPlan,
                 },
             )
-            return resp.text
 
-        text = await loop.run_in_executor(None, run)
+        resp = await loop.run_in_executor(None, run)
+
+        parsed = getattr(resp, "parsed", None)
+        if parsed is not None:
+            return parsed if isinstance(parsed, VisitPlan) else VisitPlan.model_validate(parsed)
+
+        text = (resp.text or "").strip()
+        if not text and resp.candidates:
+            parts = resp.candidates[0].content.parts
+            text = "".join(getattr(p, "text", "") or "" for p in parts).strip()
+
+        text = self._strip_code_fences(text)
+        if not text:
+            raise RuntimeError("Gemini returned an empty plan response")
         return VisitPlan.model_validate_json(text)
