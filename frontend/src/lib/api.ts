@@ -164,8 +164,6 @@ export interface ClinicalNote {
 
 export interface SubmitNoteResponse {
   note: ClinicalNote
-  appointment_status: string
-  medical_record_id: string | null
   message: string
 }
 
@@ -265,13 +263,15 @@ export const invoicesApi = {
   get: (id: string) => api.get<InvoiceWithItems>(`/invoices/${id}`).then(r => r.data),
 }
 
-export const realApi = {
-  authApi,
-  ownersApi,
-  petsApi,
-  appointmentsApi,
-  clinicalNotesApi,
-  inventoryApi,
-  dashboardApi,
-  invoicesApi,
+export const transcriptionApi = {
+  transcribe: async (blob: Blob) => {
+    const form = new FormData()
+    form.append('file', blob, 'recording.webm')
+    const { data } = await api.post<{ text: string; model: string }>('/transcribe', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    return data
+  },
 }
+
+export const agentWsUrl = import.meta.env.VITE_AGENT_URL || 'ws://localhost:8001/agent'

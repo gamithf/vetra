@@ -48,9 +48,9 @@ def dt(offset_days: int = 0, hour: int = 9, minute: int = 0) -> datetime:
 # ──────────────────────────────────────────────
 
 async def seed(session: AsyncSession):
-    print("🧹 Clearing existing data…")
-    for table in reversed(SQLModel.metadata.sorted_tables):
-        await session.execute(text(f"TRUNCATE TABLE {table.name} RESTART IDENTITY CASCADE"))
+    # print("🧹 Clearing existing data…")
+    # for table in reversed(SQLModel.metadata.sorted_tables):
+    #     await session.execute(text(f"TRUNCATE TABLE {table.name} RESTART IDENTITY CASCADE"))
 
     # ── Rooms ──────────────────────────────
     rooms_data = [
@@ -138,11 +138,11 @@ async def seed(session: AsyncSession):
 
     appointments_data = [
         # Today's appointments
-        {"pet_id": pets[0].id,  "vet_id": vet1.id, "owner_id": owners[0].id, "room_id": rooms[0].id, "start_time": today.replace(hour=9,  minute=0),  "end_time": today.replace(hour=9,  minute=30), "status": AppointmentStatus.CHECKED_IN,    "reason": "Annual wellness exam",           "is_urgent": False},
-        {"pet_id": pets[2].id,  "vet_id": vet1.id, "owner_id": owners[1].id, "room_id": rooms[1].id, "start_time": today.replace(hour=9,  minute=30), "end_time": today.replace(hour=10, minute=0),  "status": AppointmentStatus.CHECKED_IN,    "reason": "Vaccination booster",           "is_urgent": False},
-        {"pet_id": pets[4].id,  "vet_id": vet2.id, "owner_id": owners[2].id, "room_id": rooms[2].id, "start_time": today.replace(hour=10, minute=0),  "end_time": today.replace(hour=10, minute=30), "status": AppointmentStatus.IN_PROGRESS,   "reason": "Limping — possible sprain",     "is_urgent": False},
+        {"pet_id": pets[0].id,  "vet_id": vet1.id, "owner_id": owners[0].id, "room_id": rooms[0].id, "start_time": today.replace(hour=9,  minute=0),  "end_time": today.replace(hour=9,  minute=30), "status": AppointmentStatus.SCHEDULED,    "reason": "Annual wellness exam",           "is_urgent": False},
+        {"pet_id": pets[2].id,  "vet_id": vet1.id, "owner_id": owners[1].id, "room_id": rooms[1].id, "start_time": today.replace(hour=9,  minute=30), "end_time": today.replace(hour=10, minute=0),  "status": AppointmentStatus.SCHEDULED,    "reason": "Vaccination booster",           "is_urgent": False},
+        {"pet_id": pets[4].id,  "vet_id": vet2.id, "owner_id": owners[2].id, "room_id": rooms[2].id, "start_time": today.replace(hour=10, minute=0),  "end_time": today.replace(hour=10, minute=30), "status": AppointmentStatus.SCHEDULED,   "reason": "Limping — possible sprain",     "is_urgent": False},
         {"pet_id": pets[8].id,  "vet_id": vet2.id, "owner_id": owners[4].id, "room_id": rooms[0].id, "start_time": today.replace(hour=10, minute=30), "end_time": today.replace(hour=11, minute=0),  "status": AppointmentStatus.SCHEDULED,     "reason": "Dental cleaning",                "is_urgent": False},
-        {"pet_id": pets[10].id, "vet_id": vet1.id, "owner_id": owners[5].id, "room_id": rooms[1].id, "start_time": today.replace(hour=11, minute=0),  "end_time": today.replace(hour=11, minute=30), "status": AppointmentStatus.IN_PROGRESS,   "reason": "Skin rash examination",          "is_urgent": False},
+        {"pet_id": pets[10].id, "vet_id": vet1.id, "owner_id": owners[5].id, "room_id": rooms[1].id, "start_time": today.replace(hour=11, minute=0),  "end_time": today.replace(hour=11, minute=30), "status": AppointmentStatus.SCHEDULED,   "reason": "Skin rash examination",          "is_urgent": False},
         {"pet_id": pets[12].id, "vet_id": vet3.id, "owner_id": owners[6].id, "room_id": rooms[3].id, "start_time": today.replace(hour=11, minute=30), "end_time": today.replace(hour=12, minute=30), "status": AppointmentStatus.SCHEDULED,     "reason": "Surgery — spay",                "is_urgent": False},
         {"pet_id": pets[14].id, "vet_id": vet3.id, "owner_id": owners[7].id, "room_id": rooms[0].id, "start_time": today.replace(hour=13, minute=0),  "end_time": today.replace(hour=13, minute=30), "status": AppointmentStatus.SCHEDULED,     "reason": "Urgent — vomiting since yesterday","is_urgent": True},
         {"pet_id": pets[6].id,  "vet_id": vet1.id, "owner_id": owners[3].id, "room_id": rooms[2].id, "start_time": today.replace(hour=14, minute=0),  "end_time": today.replace(hour=14, minute=30), "status": AppointmentStatus.SCHEDULED,     "reason": "Follow-up ear infection",        "is_urgent": False},

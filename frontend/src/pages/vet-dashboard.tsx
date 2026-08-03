@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import type { Appointment, Pet, MedicalRecord, VetDashboard } from '@/lib/api'
-import { useApi } from '@/lib/use-api'
+import { appointmentsApi, dashboardApi, petsApi } from '@/lib/api'
 import { CopilotWidget } from '@/components/copilot-widget'
 import { useAuth } from '@/context/auth-context'
 import { toast } from 'sonner'
@@ -83,7 +83,6 @@ function PatientEMR({
   onBack: () => void
   onRefresh: () => void
 }) {
-  const { petsApi } = useApi()
   const [records, setRecords] = useState<MedicalRecord[]>([])
   const [pet, setPet] = useState<Pet | null>(null)
   const [loading, setLoading] = useState(true)
@@ -102,7 +101,6 @@ function PatientEMR({
 
   useEffect(() => { load() }, [load])
 
-  const { appointmentsApi } = useApi()
   const handleStart = async () => {
     if (!appointment) return
     setActionLoading('start')
@@ -227,7 +225,6 @@ function PatientEMR({
 }
 
 export function VetDashboard() {
-  const { appointmentsApi, dashboardApi, petsApi } = useApi()
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [dashData, setDashData] = useState<VetDashboard>({ today_appointments: 0, pending_notes: 0, checked_in_patients: 0, urgent_cases: 0 })
   const [petNames, setPetNames] = useState<Record<string, string>>({})
@@ -328,7 +325,7 @@ export function VetDashboard() {
                 key={apt.id}
                 appointment={apt}
                 petName={petNames[apt.pet_id] || `Patient #${apt.pet_id.slice(0, 8)}`}
-                selected={selectedAppt?.id === apt.id}
+                selected={false}
                 popIn={checkedInIds.has(apt.id)}
                 onClick={() => setSelectedAppt(apt)}
               />
@@ -348,6 +345,7 @@ export function VetDashboard() {
         activePatientId={selectedAppt?.pet_id ?? null}
         activePatientName={selectedPetName}
         activeAppointmentId={selectedAppt?.id ?? null}
+        activeAppointmentReason={selectedAppt?.reason ?? null}
         onNoteSubmitted={handleNoteSubmitted}
       />
     </div>
