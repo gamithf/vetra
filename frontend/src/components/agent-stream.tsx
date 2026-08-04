@@ -141,7 +141,7 @@ export function AgentStream({ open, transcript, petId, appointmentId, appointmen
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10">
               <Brain size={15} className="text-primary" />
             </span>
-            Vetra Agent Pipeline
+            Vetra Agent
           </div>
           <button
             onClick={onClose}
@@ -155,7 +155,7 @@ export function AgentStream({ open, transcript, petId, appointmentId, appointmen
         <div className="grid flex-1 grid-cols-[200px_1fr] overflow-hidden">
           <aside className="border-r bg-muted/20 p-3">
             <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Agents
+              Agents Pipeline
             </p>
             <ul className="space-y-1">
               {AGENTS.map((a) => {
@@ -167,7 +167,7 @@ export function AgentStream({ open, transcript, petId, appointmentId, appointmen
                       onClick={() => setActiveAgent(a.key)}
                       className={cn(
                         'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs transition-colors',
-                        isActive ? 'bg-primary/10 text-primary' : 'hover:bg-accent',
+                        isActive ? 'bg-primary/10 text-primary' : 'hover:bg-accent cursor-pointer',
                         st === 'pending' && !isActive && 'text-muted-foreground/60',
                         st === 'complete' && !isActive && 'text-muted-foreground',
                       )}
