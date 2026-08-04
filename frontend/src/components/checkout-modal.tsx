@@ -5,11 +5,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import type { Appointment, InvoiceWithItems } from '@/lib/api'
 import { appointmentsApi, invoicesApi } from '@/lib/api'
+import { formatCurrency } from '@/lib/format'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 
 interface Props {
   appointment: Appointment | null
+  petName?: string | null
   open: boolean
   onClose: () => void
   onSuccess: () => void
@@ -22,7 +24,7 @@ const paymentMethods = [
   { value: 'bank_transfer', label: 'Bank Transfer', icon: <Landmark size={18} /> },
 ]
 
-export function CheckoutModal({ appointment, open, onClose, onSuccess }: Props) {
+export function CheckoutModal({ appointment, petName, open, onClose, onSuccess }: Props) {
   const [invoice, setInvoice] = useState<InvoiceWithItems | null>(null)
   const [loading, setLoading] = useState(false)
   const [paying, setPaying] = useState(false)
@@ -33,9 +35,10 @@ export function CheckoutModal({ appointment, open, onClose, onSuccess }: Props) 
       setLoading(true)
       setInvoice(null)
       setPaymentMethod('credit_card')
-      appointmentsApi.createInvoice(appointment.id)
+      invoicesApi.getByAppointment(appointment.id)
+        .catch(() => appointmentsApi.createInvoice(appointment.id))
         .then(setInvoice)
-        .catch(() => toast.error('Failed to create invoice'))
+        .catch(() => toast.error('Failed to load invoice'))
         .finally(() => setLoading(false))
     }
   }, [open, appointment])
@@ -72,10 +75,12 @@ export function CheckoutModal({ appointment, open, onClose, onSuccess }: Props) 
         <CardContent className="space-y-5">
           <div className="flex items-center gap-3 rounded-lg bg-muted/50 p-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary font-bold uppercase">
-              #{appointment.pet_id.slice(0, 2)}
+              {(petName || '#')[0] || '#'}
             </div>
             <div>
-              <p className="text-sm font-medium">Patient #{appointment.pet_id.slice(0, 8)}</p>
+              <p className="text-sm font-medium">
+                {petName ? <>{petName} <span className="text-xs text-muted-foreground">· #{appointment.pet_id.slice(0, 6)}</span></> : `Patient #${appointment.pet_id.slice(0, 8)}`}
+              </p>
               <p className="text-xs text-muted-foreground">{appointment.reason || 'Check-up'}</p>
             </div>
             <Badge variant="success" className="ml-auto">Completed</Badge>
@@ -94,13 +99,13 @@ export function CheckoutModal({ appointment, open, onClose, onSuccess }: Props) 
                     <div key={item.id} className="flex items-center justify-between px-4 py-2.5 text-sm">
                       <span>{item.description}</span>
                       <span className="font-medium tabular-nums">
-                        {item.quantity > 1 && `${item.quantity} × `}${item.unit_price.toFixed(2)}
+                        {item.quantity > 1 && `${item.quantity} × `}{formatCurrency(item.unit_price)}
                       </span>
                     </div>
                   ))}
                   <div className="flex items-center justify-between bg-muted/30 px-4 py-3 text-sm font-bold">
                     <span>Total</span>
-                    <span>${invoice.total_amount.toFixed(2)}</span>
+                    <span>{formatCurrency(invoice.total_amount)}</span>
                   </div>
                 </div>
               </div>
@@ -131,7 +136,7 @@ export function CheckoutModal({ appointment, open, onClose, onSuccess }: Props) 
                 {paying ? (
                   <><Loader2 size={16} className="animate-spin" /> Processing...</>
                 ) : (
-                  <><DollarSign size={16} /> Pay ${invoice.total_amount.toFixed(2)}</>
+                  <><DollarSign size={16} /> Pay {formatCurrency(invoice.total_amount)}</>
                 )}
               </Button>
             </>

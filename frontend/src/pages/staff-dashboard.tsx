@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import {
   Calendar, Package, AlertTriangle, CheckCircle2, Clock, Plus, Search,
   LogOut, Pill, Syringe, ShoppingCart, DollarSign, FileText,
-  Loader2, PawPrint, UserCheck, Users, Ambulance,
+  Loader2, PawPrint, UserCheck, Users, Ambulance, Receipt,
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -11,13 +11,27 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import type { Appointment, InventoryItem, StaffDashboard } from '@/lib/api'
-import { appointmentsApi, inventoryApi, dashboardApi } from '@/lib/api'
+import type { Appointment, InventoryItem, Pet, StaffDashboard } from '@/lib/api'
+import { appointmentsApi, inventoryApi, dashboardApi, petsApi, invoicesApi } from '@/lib/api'
+import { WS_URL } from '@/lib/constants'
+import { formatMoney } from '@/lib/format'
 import { EmergencyIntakeModal } from '@/components/emergency-intake-modal'
 import { CheckoutModal } from '@/components/checkout-modal'
 import { useAuth } from '@/context/auth-context'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+
+function usePetNames() {
+  const [map, setMap] = useState<Record<string, string>>({})
+  useEffect(() => {
+    petsApi.list({}).then((pets: Pet[]) => {
+      const m: Record<string, string> = {}
+      pets.forEach((p) => { m[p.id] = p.name })
+      setMap(m)
+    }).catch(() => {})
+  }, [])
+  return map
+}
 
 const statusConfig: Record<string, { label: string; variant: 'secondary' | 'default' | 'destructive' | 'outline' }> = {
   scheduled: { label: 'Scheduled', variant: 'secondary' },
@@ -54,6 +68,7 @@ function formatDate(d: string, pattern: string): string {
 function CalendarView() {
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [loading, setLoading] = useState(true)
+  const petNames = usePetNames()
   useEffect(() => {
     appointmentsApi.list().then(setAppointments).catch(() => toast.error('Failed to load')).finally(() => setLoading(false))
   }, [])
@@ -85,7 +100,9 @@ function CalendarView() {
                       <span className="text-xs text-muted-foreground">{formatDate(apt.start_time, 'h:mm a').split(' ')[1]}</span>
                     </div>
                     <div>
-                      <p className="text-sm font-medium">#{apt.pet_id.slice(0, 8)}</p>
+                      <p className="text-sm font-medium">
+                        {petNames[apt.pet_id] || 'Patient'} <span className="text-xs font-normal text-muted-foreground">#{apt.pet_id.slice(0, 6)}</span>
+                      </p>
                       <p className="text-xs text-muted-foreground">{apt.reason || 'Check-up'}</p>
                     </div>
                   </div>
@@ -135,13 +152,14 @@ function InventoryView() {
       </div>
       <Table>
         <TableHeader>
-          <TableRow><TableHead>Item</TableHead><TableHead>Category</TableHead><TableHead>Quantity</TableHead><TableHead>Min.</TableHead><TableHead>Status</TableHead></TableRow>
+          <TableRow><TableHead>Item</TableHead><TableHead>Category</TableHead><TableHead>Price</TableHead><TableHead>Quantity</TableHead><TableHead>Min.</TableHead><TableHead>Status</TableHead></TableRow>
         </TableHeader>
         <TableBody>
           {normal.map((item) => (
             <TableRow key={item.id}>
               <TableCell className="font-medium">{item.name}</TableCell>
               <TableCell className="capitalize"><div className="flex items-center gap-2">{catIcons[item.category]}{item.category}</div></TableCell>
+              <TableCell className="tabular-nums">{item.price_per_unit ? formatMoney(item.price_per_unit) : '—'} / {item.unit}</TableCell>
               <TableCell>{item.quantity} {item.unit}</TableCell>
               <TableCell>{item.min_quantity}</TableCell>
               <TableCell><Badge variant="outline" className="gap-1"><CheckCircle2 size={12} /> In Stock</Badge></TableCell>
@@ -151,12 +169,13 @@ function InventoryView() {
             <TableRow key={item.id} className="bg-red-50/30">
               <TableCell className="font-medium">{item.name}</TableCell>
               <TableCell className="capitalize"><div className="flex items-center gap-2">{catIcons[item.category]}{item.category}</div></TableCell>
+              <TableCell className="tabular-nums">{item.price_per_unit ? formatMoney(item.price_per_unit) : '—'} / {item.unit}</TableCell>
               <TableCell className="font-bold text-red-600">{item.quantity} {item.unit}</TableCell>
               <TableCell>{item.min_quantity}</TableCell>
               <TableCell><Badge variant="destructive" className="gap-1"><AlertTriangle size={12} /> Low</Badge></TableCell>
             </TableRow>
           ))}
-          {filtered.length === 0 && <TableRow><TableCell colSpan={5} className="py-10 text-center text-muted-foreground">No items found</TableCell></TableRow>}
+          {filtered.length === 0 && <TableRow><TableCell colSpan={6} className="py-10 text-center text-muted-foreground">No items found</TableCell></TableRow>}
         </TableBody>
       </Table>
     </div>
@@ -173,23 +192,51 @@ export function StaffDashboard() {
   const [emergencyOpen, setEmergencyOpen] = useState(false)
   const [checkoutAppt, setCheckoutAppt] = useState<Appointment | null>(null)
   const [pendingCheckout, setPendingCheckout] = useState<Appointment[]>([])
+  const [invoiceTotals, setInvoiceTotals] = useState<Record<string, number>>({})
+  const petNames = usePetNames()
   const { user } = useAuth()
 
   const load = useCallback(async () => {
     try {
       const [dash, apps, pending] = await Promise.all([
         dashboardApi.staff(),
-        appointmentsApi.list({}),
+        appointmentsApi.today(),
         appointmentsApi.pendingCheckout(),
       ])
       setDashData(dash)
       setAppointments(apps)
       setPendingCheckout(pending)
+      Promise.all(
+        pending.map((apt) =>
+          invoicesApi.getByAppointment(apt.id)
+            .then((inv) => ({ id: apt.id, total: inv.total_amount }))
+            .catch(() => null),
+        ),
+      ).then((rows) => {
+        const m: Record<string, number> = {}
+        rows.forEach((r) => { if (r) m[r.id] = r.total })
+        setInvoiceTotals(m)
+      })
     } catch { toast.error('Failed to load dashboard') }
     finally { setLoading(false) }
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  // Live updates: staff dashboard refreshes when the agent finalizes a visit
+  // (invoice.created / appointment.completed) without a manual refresh.
+  useEffect(() => {
+    const ws = new WebSocket(WS_URL)
+    ws.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data)
+        if (msg.type === 'invoice.created' || msg.type === 'appointment.completed' || msg.type === 'appointment.checked_in' || msg.type === 'appointment.started') {
+          load()
+        }
+      } catch { /* ignore malformed frames */ }
+    }
+    return () => ws.close()
+  }, [load])
 
   const handleCheckIn = async (id: string) => {
     setProcessing(id)
@@ -355,7 +402,10 @@ export function StaffDashboard() {
                   {activeApps.map((apt) => (
                     <TableRow key={apt.id} className={cn(apt.is_urgent && 'bg-red-50/30')}>
                       <TableCell className="font-medium">{formatDate(apt.start_time, 'h:mm a')}</TableCell>
-                      <TableCell><span className="font-medium">#{apt.pet_id.slice(0, 8)}</span></TableCell>
+                      <TableCell>
+                        <span className="font-medium">{petNames[apt.pet_id] || 'Patient'}</span>{' '}
+                        <span className="text-xs text-muted-foreground">#{apt.pet_id.slice(0, 6)}</span>
+                      </TableCell>
                       <TableCell className="text-muted-foreground capitalize">{apt.reason || 'Check-up'}</TableCell>
                       <TableCell>
                         <Badge variant={statusConfig[apt.status]?.variant || 'secondary'}>{statusConfig[apt.status]?.label || apt.status}</Badge>
@@ -388,18 +438,30 @@ export function StaffDashboard() {
               Pending Checkout ({pendingCheckout.length})
             </h3>
             {pendingCheckout.length === 0 ? (
-              <Card><CardContent className="flex flex-col items-center py-12"><DollarSign size={40} className="mb-3 text-muted-foreground/30" /><p className="font-medium">No pending checkouts</p><p className="text-sm text-muted-foreground">All completed appointments have been invoiced</p></CardContent></Card>
+              <Card><CardContent className="flex flex-col items-center py-12"><DollarSign size={40} className="mb-3 text-muted-foreground/30" /><p className="font-medium">No pending checkouts</p><p className="text-sm text-muted-foreground">All completed visits have been paid</p></CardContent></Card>
             ) : (
               <Table>
                 <TableHeader>
-                  <TableRow><TableHead>Time</TableHead><TableHead>Patient</TableHead><TableHead>Reason</TableHead><TableHead className="text-right">Action</TableHead></TableRow>
+                  <TableRow><TableHead>Time</TableHead><TableHead>Patient</TableHead><TableHead>Reason</TableHead><TableHead>Invoice</TableHead><TableHead className="text-right">Action</TableHead></TableRow>
                 </TableHeader>
                 <TableBody>
                   {pendingCheckout.map((apt) => (
                     <TableRow key={apt.id}>
                       <TableCell className="font-medium">{formatDate(apt.start_time, 'h:mm a')}</TableCell>
-                      <TableCell><span className="font-medium">#{apt.pet_id.slice(0, 8)}</span></TableCell>
+                      <TableCell>
+                        <span className="font-medium">{petNames[apt.pet_id] || 'Patient'}</span>{' '}
+                        <span className="text-xs text-muted-foreground">#{apt.pet_id.slice(0, 6)}</span>
+                      </TableCell>
                       <TableCell className="text-muted-foreground">{apt.reason || 'Check-up'}</TableCell>
+                      <TableCell>
+                        {invoiceTotals[apt.id] !== undefined ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                            <Receipt size={12} /> {formatMoney(invoiceTotals[apt.id])}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">Awaiting invoice</span>
+                        )}
+                      </TableCell>
                       <TableCell className="text-right">
                         <Button size="sm" onClick={() => setCheckoutAppt(apt)} className="gap-1.5">
                           <DollarSign size={14} /> Checkout
@@ -415,7 +477,13 @@ export function StaffDashboard() {
       )}
 
       <EmergencyIntakeModal open={emergencyOpen} onClose={() => setEmergencyOpen(false)} onSuccess={load} />
-      <CheckoutModal appointment={checkoutAppt} open={!!checkoutAppt} onClose={() => setCheckoutAppt(null)} onSuccess={load} />
+      <CheckoutModal
+        appointment={checkoutAppt}
+        petName={checkoutAppt ? petNames[checkoutAppt.pet_id] : null}
+        open={!!checkoutAppt}
+        onClose={() => setCheckoutAppt(null)}
+        onSuccess={load}
+      />
     </div>
   )
 }

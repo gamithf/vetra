@@ -40,6 +40,31 @@ async def list_invoices(
     return [InvoiceResponse.model_validate(i) for i in invoices]
 
 
+@router.get("/by-appointment/{appointment_id}", response_model=InvoiceWithItemsResponse)
+async def get_invoice_by_appointment(
+    appointment_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    result = await session.execute(
+        select(Invoice).where(Invoice.appointment_id == appointment_id)
+    )
+    invoice = result.scalar_one_or_none()
+    if not invoice:
+        raise NotFoundError("Invoice not found for this appointment")
+
+    items_result = await session.execute(
+        select(InvoiceItem).where(InvoiceItem.invoice_id == invoice.id)
+    )
+    items = items_result.scalars().all()
+
+    response = InvoiceResponse.model_validate(invoice)
+    return InvoiceWithItemsResponse(
+        **response.model_dump(),
+        items=[InvoiceItemResponse.model_validate(i) for i in items],
+    )
+
+
 @router.get("/{invoice_id}", response_model=InvoiceWithItemsResponse)
 async def get_invoice(
     invoice_id: uuid.UUID,

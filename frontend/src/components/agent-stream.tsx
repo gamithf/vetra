@@ -3,9 +3,10 @@ import {
   Brain, CheckCircle2, ClipboardList, FileText, FolderOpen, Loader2,
   Package, Receipt, X,
 } from 'lucide-react'
-import { agentWsUrl } from '@/lib/api'
+import { AGENT_WS_URL } from '@/lib/constants'
 import { useAuth } from '@/context/auth-context'
 import { cn } from '@/lib/utils'
+import { formatCurrency } from '@/lib/format'
 
 export interface AgentSummary {
   diagnosis: string
@@ -52,25 +53,26 @@ export function AgentStream({ open, transcript, petId, appointmentId, appointmen
   const { token, user } = useAuth()
   const [states, setStates] = useState<Record<string, AgentState>>({})
   const [details, setDetails] = useState<Record<string, string>>({})
-  const [thinking, setThinking] = useState('')
-  const [currentAgent, setCurrentAgent] = useState<string | null>(null)
+  const [thinking, setThinking] = useState<Record<string, string>>({})
+  const [results, setResults] = useState<Record<string, string>>({})
+  const [activeAgent, setActiveAgent] = useState<string | null>(null)
   const [summary, setSummary] = useState<AgentSummary | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const currentRef = useRef<string | null>(null)
-  const doneRef = useRef(false)
+  const scrollRef = useRef<HTMLDivElement | null>(null)
+  const liveRef = useRef<string | null>(null)
 
   useEffect(() => {
     if (!open) return
     setStates({})
     setDetails({})
-    setThinking('')
-    setCurrentAgent(null)
+    setThinking({})
+    setResults({})
+    setActiveAgent(null)
     setSummary(null)
     setError(null)
-    doneRef.current = false
-    currentRef.current = null
+    liveRef.current = null
 
-    const ws = new WebSocket(agentWsUrl)
+    const ws = new WebSocket(AGENT_WS_URL)
     ws.onopen = () => {
       ws.send(JSON.stringify({
         type: 'run',
@@ -85,98 +87,134 @@ export function AgentStream({ open, transcript, petId, appointmentId, appointmen
     ws.onmessage = (e) => {
       const msg = JSON.parse(e.data)
       if (msg.type === 'thinking') {
-        if (msg.agent !== currentRef.current) {
-          currentRef.current = msg.agent
-          setCurrentAgent(msg.agent)
-          setThinking('')
+        if (msg.agent === liveRef.current || liveRef.current === null) {
+          setThinking((t) => ({ ...t, [msg.agent]: (t[msg.agent] || '') + msg.text }))
+        } else {
+          setThinking((t) => ({ ...t, [msg.agent]: (t[msg.agent] || '') + msg.text }))
         }
-        setThinking((t) => t + msg.text)
       } else if (msg.type === 'agent') {
-        currentRef.current = msg.agent
-        setCurrentAgent(msg.agent)
         setStates((s) => ({ ...s, [msg.agent]: msg.status }))
         if (msg.detail) setDetails((d) => ({ ...d, [msg.agent]: msg.detail }))
-        if (msg.status === 'working' || msg.status === 'thinking') setThinking('')
+        if (msg.status === 'working' || msg.status === 'thinking') {
+          liveRef.current = msg.agent
+          setActiveAgent(msg.agent)
+        } else if (msg.status === 'complete' && liveRef.current === msg.agent) {
+          liveRef.current = null
+        }
+      } else if (msg.type === 'result') {
+        setResults((r) => ({ ...r, [msg.agent]: msg.text }))
       } else if (msg.type === 'done') {
         setSummary(msg.summary)
-        doneRef.current = true
+        liveRef.current = null
+        // Return to the summary view so the "Done" button is always reachable,
+        // even if an agent's step is the last one viewed.
+        setActiveAgent(null)
       } else if (msg.type === 'error') {
         setError(msg.detail)
+        setActiveAgent(null)
       }
     }
     ws.onerror = () => setError('Agent service connection failed')
     return () => ws.close()
   }, [open, token, transcript, petId, appointmentId, appointmentReason, user?.id, user?.role])
 
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+  }, [thinking, activeAgent])
+
+  if (!open) return null
+
   const done = summary !== null
-  const currentDetail = currentAgent ? details[currentAgent] : null
+  const view = activeAgent
+  const viewState = view ? states[view] || 'pending' : 'pending'
+  const viewThinking = view ? thinking[view] || '' : ''
+  const viewResult = view ? results[view] : undefined
+  const viewDetail = view ? details[view] : undefined
+  const isLive = liveRef.current === view && (viewState === 'working' || viewState === 'thinking')
+  const content = viewResult || (viewThinking ? viewThinking : (viewDetail || ''))
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="flex w-full max-w-2xl flex-col overflow-hidden rounded-2xl border bg-card shadow-2xl">
+      <div className="flex h-[560px] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border bg-card shadow-2xl">
         <div className="flex items-center justify-between border-b px-5 py-3.5">
           <div className="flex items-center gap-2 text-sm font-semibold">
-            <Brain size={16} className="text-primary" />
-            Vetra Agent Pipeline
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10">
+              <Brain size={15} className="text-primary" />
+            </span>
+            Vetra Agent
           </div>
-          <ButtonGhost onClose={onClose} done={done} />
+          <button
+            onClick={onClose}
+            disabled={!done}
+            className={cn('rounded-md p-1 text-muted-foreground hover:bg-accent', !done && 'opacity-40')}
+          >
+            <X size={16} />
+          </button>
         </div>
 
-        <div className="grid grid-cols-[200px_1fr]">
-          <div className="border-r p-3">
+        <div className="grid flex-1 grid-cols-[200px_1fr] overflow-hidden">
+          <aside className="border-r bg-muted/20 p-3">
+            <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Agents Pipeline
+            </p>
             <ul className="space-y-1">
               {AGENTS.map((a) => {
                 const st = states[a.key] || 'pending'
+                const isActive = view === a.key
                 return (
-                  <li
-                    key={a.key}
-                    className={cn(
-                      'flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs',
-                      (st === 'working' || st === 'thinking') && 'bg-primary/10 text-primary',
-                      (st === 'complete') && 'text-muted-foreground',
-                      st === 'pending' && 'text-muted-foreground/60',
-                    )}
-                  >
-                    {statusIcon(st)}
-                    <span className="flex items-center gap-1.5">
-                      {a.icon}
-                      {a.label}
-                    </span>
+                  <li key={a.key}>
+                    <button
+                      onClick={() => setActiveAgent(a.key)}
+                      className={cn(
+                        'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs transition-colors',
+                        isActive ? 'bg-primary/10 text-primary' : 'hover:bg-accent cursor-pointer',
+                        st === 'pending' && !isActive && 'text-muted-foreground/60',
+                        st === 'complete' && !isActive && 'text-muted-foreground',
+                      )}
+                    >
+                      {statusIcon(st)}
+                      <span className="flex items-center gap-1.5 truncate">
+                        {a.icon}
+                        {a.label}
+                      </span>
+                    </button>
                   </li>
                 )
               })}
             </ul>
-          </div>
+          </aside>
 
-          <div className="min-h-[260px] p-5">
+          <div className="flex min-w-0 flex-col p-5">
             {error ? (
-              <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
+              <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
                 <X className="text-red-500" size={28} />
                 <p className="text-sm font-medium text-red-600">Agent pipeline failed</p>
-                <p className="max-w-sm text-xs text-muted-foreground">{error}</p>
+                <p className="max-w-sm break-words text-xs text-muted-foreground">{error}</p>
                 <button onClick={onClose} className="mt-1 rounded-lg border px-3 py-1.5 text-xs font-medium hover:bg-accent">
                   Close
                 </button>
               </div>
-            ) : done && summary ? (
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 text-emerald-600">
-                  <CheckCircle2 size={20} />
-                  <p className="text-sm font-semibold">Visit processed successfully</p>
-                </div>
-                <div className="space-y-2">
-                  <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Diagnosis</p>
-                    <p className="text-sm">{summary.diagnosis}</p>
+            ) : done && !view ? (
+              <div className="flex flex-1 flex-col">
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 text-emerald-600">
+                    <CheckCircle2 size={20} />
+                    <p className="text-sm font-semibold">Visit processed successfully</p>
                   </div>
-                  <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Treatment</p>
-                    <p className="text-sm">{summary.treatment}</p>
+                  <div className="space-y-2 rounded-lg border p-3">
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Diagnosis</p>
+                      <p className="text-sm">{summary.diagnosis}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Treatment</p>
+                      <p className="text-sm">{summary.treatment}</p>
+                    </div>
                   </div>
-                  <div className="flex flex-wrap gap-2 pt-1">
+                  <div className="flex flex-wrap gap-2">
                     {typeof summary.invoice_total === 'number' && (
                       <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
-                        Bill: ${summary.invoice_total.toFixed(2)}
+                        Bill: {formatCurrency(summary.invoice_total)}
                       </span>
                     )}
                     {summary.inventory_log.map((line) => (
@@ -185,38 +223,45 @@ export function AgentStream({ open, transcript, petId, appointmentId, appointmen
                       </span>
                     ))}
                   </div>
+                  <p className="text-xs text-muted-foreground">
+                    Click any agent on the left to review exactly what it did.
+                  </p>
                 </div>
                 <button
                   onClick={() => onDone(summary)}
-                  className="w-full rounded-lg bg-primary py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+                  className="mt-auto w-full rounded-lg bg-primary py-2.5 text-sm font-medium text-primary-foreground hover:opacity-90"
                 >
                   Done
                 </button>
               </div>
             ) : (
-              <div className="flex h-full flex-col">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  {currentAgent ? `${currentAgent} agent` : 'Agents working...'}
-                </p>
-                <div className="flex-1 overflow-y-auto rounded-lg border bg-muted/40 p-3">
+              <div className="flex min-h-0 flex-1 flex-col">
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    {view ? (AGENTS.find((a) => a.key === view)?.label || view) : 'Agents working...'}
+                  </p>
+                  {isLive && (
+                    <span className="flex items-center gap-1.5 text-[10px] font-medium text-primary">
+                      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" /> LIVE
+                    </span>
+                  )}
+                </div>
+                <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto rounded-lg border bg-muted/40 p-3">
                   <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-foreground/90">
-                    {thinking || currentDetail || 'Initializing pipeline...'}
-                    {currentAgent === 'medical' && !thinking && currentDetail ? <span className="ml-1 inline-block h-3.5 w-1.5 animate-pulse bg-primary align-middle" /> : null}
+                    {content || 'Waiting for this agent to run...'}
+                    {isLive && <span className="ml-1 inline-block h-3.5 w-1.5 animate-pulse bg-primary align-middle" />}
                   </p>
                 </div>
+                {view && !viewResult && viewThinking && (
+                  <p className="mt-2 text-[10px] text-muted-foreground">
+                    {viewState === 'complete' ? 'Streamed reasoning from this step.' : 'Streaming reasoning...'}
+                  </p>
+                )}
               </div>
             )}
           </div>
         </div>
       </div>
     </div>
-  )
-}
-
-function ButtonGhost({ onClose, done }: { onClose: () => void; done: boolean }) {
-  return (
-    <button onClick={onClose} disabled={!done} className={cn('rounded-md p-1 text-muted-foreground hover:bg-accent', !done && 'opacity-40')}>
-      <X size={16} />
-    </button>
   )
 }

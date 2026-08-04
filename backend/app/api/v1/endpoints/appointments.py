@@ -6,6 +6,7 @@ from sqlmodel import select
 from app.database import get_session
 from app.api.deps import get_current_user
 from app.core.exceptions import NotFoundError, BadRequestError
+from app.realtime import manager
 from app.models.appointment import Appointment, AppointmentStatus
 from app.models.user import User
 from app.models.invoice import Invoice, InvoiceStatus
@@ -85,7 +86,12 @@ async def pending_checkout(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    subquery = select(Invoice.appointment_id).where(Invoice.appointment_id.isnot(None))
+    # Completed visits that still need payment: either no invoice yet, or an
+    # invoice that is pending / partially paid.
+    subquery = select(Invoice.appointment_id).where(
+        Invoice.appointment_id.isnot(None),
+        Invoice.status.in_([InvoiceStatus.PAID, InvoiceStatus.CANCELLED, InvoiceStatus.REFUNDED]),
+    )
     result = await session.execute(
         select(Appointment)
         .where(Appointment.status == AppointmentStatus.COMPLETED)
@@ -192,6 +198,7 @@ async def check_in_appointment(
     session.add(appointment)
     await session.commit()
     await session.refresh(appointment)
+    await manager.broadcast({"type": "appointment.checked_in", "appointment_id": str(appointment.id)})
     return AppointmentResponse.model_validate(appointment)
 
 
@@ -255,6 +262,7 @@ async def start_appointment(
     session.add(appointment)
     await session.commit()
     await session.refresh(appointment)
+    await manager.broadcast({"type": "appointment.started", "appointment_id": str(appointment.id)})
     return AppointmentResponse.model_validate(appointment)
 
 
@@ -274,6 +282,7 @@ async def complete_appointment(
     session.add(appointment)
     await session.commit()
     await session.refresh(appointment)
+    await manager.broadcast({"type": "appointment.completed", "appointment_id": str(appointment.id)})
     return AppointmentResponse.model_validate(appointment)
 
 
@@ -347,6 +356,13 @@ async def create_invoice_for_appointment(
     session.add(invoice)
     await session.commit()
     await session.refresh(invoice)
+
+    await manager.broadcast({
+        "type": "invoice.created",
+        "appointment_id": str(invoice.appointment_id),
+        "invoice_id": str(invoice.id),
+        "total_amount": invoice.total_amount,
+    })
 
     resp = InvoiceWithItemsResponse(
         id=invoice.id,
