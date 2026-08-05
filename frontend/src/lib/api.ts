@@ -34,6 +34,7 @@ export interface User {
   full_name: string
   role: 'vet' | 'staff' | 'admin'
   phone: string | null
+  photo_url: string | null
   is_active: boolean
   created_at: string
 }

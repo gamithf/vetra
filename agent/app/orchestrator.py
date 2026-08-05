@@ -6,17 +6,20 @@ Runs the Vetra agent pipeline for one visit and streams real-time events
 Agents:
   1. Context   — loads patient context
   2. Medical   — streams Gemini reasoning over the transcript
-  3. Notes     — saves the clinical note (raw + structured)
-  4. Records   — writes the structured medical record
-  5. Inventory — reconciles consumed items
-  6. Billing   — generates the invoice line items
-  7. Finalize  — marks the appointment completed
+  3. Safety    — Clinical Safety agent (RAG): checks prescribed drugs against
+                 the patient's current medications over an embedded vet-drug index
+  4. Notes     — saves the clinical note (raw + structured)
+  5. Records   — writes the structured medical record
+  6. Inventory — reconciles consumed items
+  7. Billing   — generates the invoice line items
+  8. Finalize  — marks the appointment completed
 """
 
 import asyncio
 
 from app.config import get_settings
 from app.gemini import GeminiClient, VisitPlan
+from app.safety import analyze as safety_analyze
 from app.tools import VetraTools
 
 THINK_TICK = 0.035  # small pacing delay so streamed thinking reads naturally
@@ -86,7 +89,51 @@ async def run_pipeline(emit, payload: dict):
     # ── 3. Structured plan (single coordinated decision) ──
     plan: VisitPlan = await gemini.plan_visit(context)
 
-    # ── 4. Notes agent — save raw + structured note ──
+    # ── 4. Clinical Safety agent (RAG) ──────────────
+    await _emit(emit, {"type": "agent", "agent": "safety", "status": "working", "detail": "Running clinical safety check (RAG)..."})
+
+    current_rx = await tools.get_pet_prescriptions(pet_id)
+    current_meds = [rx.get("medication_name", "").strip() for rx in current_rx if rx.get("is_active", True)]
+    current_meds = [m for m in current_meds if m]
+    prescribed = plan.medications or []
+
+    await _emit(emit, {
+        "type": "agent", "agent": "safety", "status": "thinking",
+        "detail": (
+            f"Semantic search over the veterinary medication index — "
+            f"{len(prescribed)} prescribed drug(s) vs {len(current_meds)} current medication(s)..."
+        ),
+    })
+
+    safety = await safety_analyze(prescribed, current_meds)
+    if safety.evidence:
+        await _think(emit, "safety", safety.evidence[0][:220] + " ")
+
+    if safety.alerts:
+        lines = [
+            f"{a.drug_a} + {a.drug_b} — {a.severity.upper()} risk.\n{a.summary}\n{a.guidance}"
+            for a in safety.alerts
+        ]
+        report = "CLINICAL SAFETY ALERTS\n\n" + "\n\n".join(lines)
+        detail = f"{len(safety.alerts)} high/medium-risk interaction(s) flagged"
+    else:
+        report = (
+            f"Clinical safety check complete — no significant interaction found.\n\n"
+            f"Prescribed: {', '.join(prescribed) or 'none'}\n"
+            f"Current medications: {', '.join(current_meds) or 'none'}\n"
+            f"Retrieved {len(safety.evidence)} reference(s) from the medication index."
+        )
+        detail = f"{len(safety.evidence)} reference(s) reviewed — no significant interactions"
+    await _emit(emit, {"type": "agent", "agent": "safety", "status": "complete", "detail": detail})
+    await _emit(emit, {"type": "result", "agent": "safety", "text": report})
+    await _emit(emit, {
+        "type": "safety",
+        "risk_level": safety.risk_level,
+        "alerts": [a.to_dict() for a in safety.alerts],
+        "summary": detail,
+    })
+
+    # ── 5. Notes agent — save raw + structured note ──
     await _emit(emit, {"type": "agent", "agent": "notes", "status": "thinking", "detail": "Structuring the clinical note..."})
     note_payload = {
         "pet_id": pet_id,
@@ -102,7 +149,7 @@ async def run_pipeline(emit, payload: dict):
     await _emit(emit, {"type": "agent", "agent": "notes", "status": "complete", "detail": note_text})
     await _emit(emit, {"type": "result", "agent": "notes", "text": note_text + "\n\n" + (plan.structured_note or "") + "\n\nRAW TRANSCRIPT:\n" + transcript})
 
-    # ── 5. Records agent — write the medical record ──
+    # ── 6. Records agent — write the medical record ──
     await _emit(emit, {"type": "agent", "agent": "records", "status": "thinking", "detail": "Writing the medical record..."})
     record_payload = {
         "pet_id": pet_id,
@@ -122,7 +169,7 @@ async def run_pipeline(emit, payload: dict):
     await _emit(emit, {"type": "agent", "agent": "records", "status": "complete", "detail": f"Diagnosis: {plan.diagnosis}"})
     await _emit(emit, {"type": "result", "agent": "records", "text": record_text})
 
-    # ── 6. Inventory agent — reconcile consumed items ──
+    # ── 7. Inventory agent — reconcile consumed items ──
     inventory = await tools.list_inventory()
     inventory_log = []
     inventory_lines = []
@@ -142,7 +189,7 @@ async def run_pipeline(emit, payload: dict):
     await _emit(emit, {"type": "agent", "agent": "inventory", "status": "complete", "detail": "Inventory updated" if inventory_log else "No inventory changes"})
     await _emit(emit, {"type": "result", "agent": "inventory", "text": inv_summary})
 
-    # ── 7. Billing agent — generate invoice ──
+    # ── 8. Billing agent — generate invoice ──
     await _emit(emit, {"type": "agent", "agent": "billing", "status": "thinking", "detail": "Calculating line items..."})
     invoice_items = [
         {"description": it.description, "quantity": it.quantity, "unit_price": it.unit_price}
@@ -160,10 +207,28 @@ async def run_pipeline(emit, payload: dict):
     await _emit(emit, {"type": "agent", "agent": "billing", "status": "complete", "detail": f"Bill generated: {_fmt_money(total)}"})
     await _emit(emit, {"type": "result", "agent": "billing", "text": bill_text})
 
-    # ── 8. Finalize agent ────────────────────────────
+    # ── 9. Finalize agent ────────────────────────────
     await _emit(emit, {"type": "agent", "agent": "finalize", "status": "working", "detail": "Marking the visit complete..."})
     await tools.complete_appointment(appointment_id)
-    finalize_text = f"Appointment completed — {context['pet_name']} is ready for checkout."
+
+    # Notify the owner via WhatsApp (best-effort — never fails the pipeline).
+    await _emit(emit, {"type": "agent", "agent": "finalize", "status": "thinking", "detail": "Notifying the owner via WhatsApp..."})
+    notify_lines = []
+    try:
+        notify = await tools.send_visit_notification(
+            appointment_id,
+            diagnosis=plan.diagnosis,
+            treatment=plan.treatment,
+        )
+        if notify.get("sent"):
+            channel = notify.get("channel") or "WhatsApp"
+            notify_lines.append(f"Owner notified via {channel} with visit summary + bill link.")
+        else:
+            notify_lines.append(f"WhatsApp skipped — {notify.get('reason', 'unknown')}")
+    except Exception as exc:  # noqa: BLE001
+        notify_lines.append(f"WhatsApp notify failed: {str(exc)[:120]}")
+
+    finalize_text = f"Appointment completed — {context['pet_name']} is ready for checkout.\n" + "\n".join(notify_lines)
     await _emit(emit, {"type": "agent", "agent": "finalize", "status": "complete", "detail": "Appointment completed"})
     await _emit(emit, {"type": "result", "agent": "finalize", "text": finalize_text})
 
@@ -176,5 +241,10 @@ async def run_pipeline(emit, payload: dict):
             "note_id": note_id,
             "invoice_total": total,
             "inventory_log": inventory_log,
+            "safety": {
+                "risk_level": safety.risk_level,
+                "alerts": [a.to_dict() for a in safety.alerts],
+                "summary": detail,
+            },
         },
     })

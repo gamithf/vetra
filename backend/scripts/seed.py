@@ -73,13 +73,14 @@ async def seed(session: AsyncSession):
     print(f"  ✓ {len(rooms)} rooms")
 
     # ── Users ──────────────────────────────
+    avatar = lambda slug: f"https://api.dicebear.com/9.x/notionists/svg?seed={slug}"
     users_data = [
-        {"email": "vet1@vetra.com",   "password": "password123", "full_name": "Dr. Kasun Perera",       "role": UserRole.VET,    "phone": "070-1010-001"},
-        {"email": "vet2@vetra.com",  "password": "password123", "full_name": "Dr. Nadeesha Fernando",    "role": UserRole.VET,    "phone": "070-1010-002"},
-        {"email": "vet3@vetra.com",  "password": "password123", "full_name": "Dr. Ruwan Bandara",        "role": UserRole.VET,    "phone": "070-1010-003"},
-        {"email": "staff1@vetra.com", "password": "password123", "full_name": "Ishara Kumari",           "role": UserRole.STAFF,  "phone": "070-1020-001"},
-        {"email": "staff2@vetra.com","password": "password123", "full_name": "Chaminda Silva",           "role": UserRole.STAFF,  "phone": "070-1020-002"},
-        {"email": "admin1@vetra.com", "password": "password123", "full_name": "Sahan De Silva",          "role": UserRole.ADMIN,  "phone": "070-1000-001"},
+        {"email": "vet1@vetra.com",   "password": "@password123PP", "full_name": "Dr. Kasun Perera",       "role": UserRole.VET,    "phone": "070-1010-001", "photo_url": avatar("Kasun")},
+        {"email": "vet2@vetra.com",  "password": "@password123PP", "full_name": "Dr. Nadeesha Fernando",    "role": UserRole.VET,    "phone": "070-1010-002", "photo_url": avatar("Nadeesha")},
+        {"email": "vet3@vetra.com",  "password": "@password123PP", "full_name": "Dr. Ruwan Bandara",        "role": UserRole.VET,    "phone": "070-1010-003", "photo_url": avatar("Ruwan")},
+        {"email": "staff1@vetra.com", "password": "@password123PP", "full_name": "Ishara Kumari",           "role": UserRole.STAFF,  "phone": "070-1020-001", "photo_url": avatar("Ishara")},
+        {"email": "staff2@vetra.com","password": "@password123PP", "full_name": "Chaminda Silva",           "role": UserRole.STAFF,  "phone": "070-1020-002", "photo_url": avatar("Chaminda")},
+        {"email": "admin1@vetra.com", "password": "@password123PP", "full_name": "Sahan De Silva",          "role": UserRole.ADMIN,  "phone": "070-1000-001", "photo_url": avatar("Sahan")},
     ]
     users = []
     for u in users_data:
@@ -89,6 +90,7 @@ async def seed(session: AsyncSession):
             full_name=u["full_name"],
             role=u["role"],
             phone=u["phone"],
+            photo_url=u["photo_url"],
         )
         users.append(user)
     session.add_all(users)
@@ -133,7 +135,7 @@ async def seed(session: AsyncSession):
         {"owner_id": owners[7].id, "name": "Tucker",    "species": PetSpecies.DOG,     "breed": "Australian Shepherd","gender": PetGender.MALE,  "date_of_birth": date(2020, 6, 25),  "weight_kg": 22.0, "color": "Blue Merle",  "microchip_id": "MC-10013"},
         {"owner_id": owners[7].id, "name": "Pepper",    "species": PetSpecies.CAT,     "breed": "Calico",           "gender": PetGender.FEMALE, "date_of_birth": date(2022, 4, 17),  "weight_kg": 4.0,  "color": "Calico",     "microchip_id": "MC-10014"},
     ]
-    pets = [Pet(**p) for p in pets_data]
+    pets = [Pet(**p, photo_url=f"https://api.dicebear.com/9.x/thumbs/svg?seed={p['name']}") for p in pets_data]
     session.add_all(pets)
     await session.flush()
     print(f"  ✓ {len(pets)} pets")

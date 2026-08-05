@@ -116,7 +116,7 @@ async def send_whatsapp_text(to: str, body: str) -> dict:
         "type": "text",
         "text": {"body": body},
     }
-    print(f"Sending WhatsApp message to {to}:\n{body}...")
+
     return await _post_message(settings, payload, "text")
 
 
@@ -191,7 +191,7 @@ async def send_visit_summary(
 
     def freeform_lines() -> list[str]:
         lines = [
-            f"Dear {owner_first}, your pet {pet_name} has completed their visit at Vetra.",
+            f"Your pet {pet_name} has completed their visit at Vetra.",
             "",
             f"Visit ID: #{visit_id}",
             f"Reason: {reason}",

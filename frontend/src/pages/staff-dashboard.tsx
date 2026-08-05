@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
   Calendar, Package, AlertTriangle, CheckCircle2, Clock, Plus, Search,
@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import type { Appointment, InventoryItem, Pet, StaffDashboard } from '@/lib/api'
 import { appointmentsApi, inventoryApi, dashboardApi, petsApi, invoicesApi } from '@/lib/api'
@@ -22,15 +23,18 @@ import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 
 function usePetNames() {
-  const [map, setMap] = useState<Record<string, string>>({})
+  const [names, setNames] = useState<Record<string, string>>({})
+  const [photos, setPhotos] = useState<Record<string, string | null>>({})
   useEffect(() => {
     petsApi.list({}).then((pets: Pet[]) => {
-      const m: Record<string, string> = {}
-      pets.forEach((p) => { m[p.id] = p.name })
-      setMap(m)
+      const n: Record<string, string> = {}
+      const ph: Record<string, string | null> = {}
+      pets.forEach((p) => { n[p.id] = p.name; ph[p.id] = p.photo_url })
+      setNames(n)
+      setPhotos(ph)
     }).catch(() => {})
   }, [])
-  return map
+  return { names, photos }
 }
 
 const statusConfig: Record<string, { label: string; variant: 'secondary' | 'default' | 'destructive' | 'outline' }> = {
@@ -68,7 +72,7 @@ function formatDate(d: string, pattern: string): string {
 function CalendarView() {
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [loading, setLoading] = useState(true)
-  const petNames = usePetNames()
+  const { names: petNames, photos: petPhotos } = usePetNames()
   useEffect(() => {
     appointmentsApi.list().then(setAppointments).catch(() => toast.error('Failed to load')).finally(() => setLoading(false))
   }, [])
@@ -94,12 +98,16 @@ function CalendarView() {
             <div className="space-y-2">
               {grouped[date].map((apt) => (
                 <div key={apt.id} className={cn('flex items-center justify-between rounded-lg border p-3', apt.is_urgent && 'border-l-4 border-l-red-500')}>
-                  <div className="flex items-center gap-4">
-                    <div className="flex min-w-[60px] flex-col items-center">
-                      <span className="text-sm font-bold">{formatDate(apt.start_time, 'h:mm')}</span>
-                      <span className="text-xs text-muted-foreground">{formatDate(apt.start_time, 'h:mm a').split(' ')[1]}</span>
-                    </div>
-                    <div>
+<div className="flex items-center gap-4">
+                      <div className="flex min-w-[60px] flex-col items-center">
+                        <span className="text-sm font-bold">{formatDate(apt.start_time, 'h:mm')}</span>
+                        <span className="text-xs text-muted-foreground">{formatDate(apt.start_time, 'h:mm a').split(' ')[1]}</span>
+                      </div>
+                      <Avatar className="h-10 w-10">
+                        <AvatarImage src={petPhotos[apt.pet_id] ?? undefined} alt={petNames[apt.pet_id] || 'Patient'} />
+                        <AvatarFallback className="bg-primary/10 text-primary">{petNames[apt.pet_id]?.[0]?.toUpperCase()}</AvatarFallback>
+                      </Avatar>
+                      <div>
                       <p className="text-sm font-medium">
                         {petNames[apt.pet_id] || 'Patient'} <span className="text-xs font-normal text-muted-foreground">#{apt.pet_id.slice(0, 6)}</span>
                       </p>
@@ -193,8 +201,17 @@ export function StaffDashboard() {
   const [checkoutAppt, setCheckoutAppt] = useState<Appointment | null>(null)
   const [pendingCheckout, setPendingCheckout] = useState<Appointment[]>([])
   const [invoiceTotals, setInvoiceTotals] = useState<Record<string, number>>({})
-  const petNames = usePetNames()
+  const [scrollToPending, setScrollToPending] = useState(false)
+  const pendingRef = useRef<HTMLDivElement>(null)
+  const { names: petNames, photos: petPhotos } = usePetNames()
   const { user } = useAuth()
+
+  useEffect(() => {
+    if (scrollToPending && tab === 'checkin') {
+      pendingRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      setScrollToPending(false)
+    }
+  }, [scrollToPending, tab])
 
   const load = useCallback(async () => {
     try {
@@ -273,9 +290,17 @@ export function StaffDashboard() {
   return (
     <div className="animate-in space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Welcome, {user?.full_name?.split(' ')[0]}</h1>
-          <p className="text-muted-foreground">Manage your clinic operations</p>
+        <div className="flex items-center gap-3">
+          <Avatar className="h-11 w-11 border">
+            <AvatarImage src={user?.photo_url ?? undefined} alt={user?.full_name} />
+            <AvatarFallback className="bg-primary/10 text-primary">
+              {user?.full_name?.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)}
+            </AvatarFallback>
+          </Avatar>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Welcome, {user?.full_name?.split(' ')[0]}</h1>
+            <p className="text-muted-foreground">Manage your clinic operations</p>
+          </div>
         </div>
         <div className="flex gap-2">
           <Button onClick={() => setEmergencyOpen(true)} variant="destructive" className="gap-2">
@@ -333,7 +358,7 @@ export function StaffDashboard() {
             key={t.id}
             onClick={() => setTab(t.id)}
             className={cn(
-              'flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-all whitespace-nowrap',
+              'flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-all whitespace-nowrap cursor-pointer',
               tab === t.id ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
             )}
           >{t.icon}{t.label}</button>
@@ -364,11 +389,16 @@ export function StaffDashboard() {
             <CardContent className="space-y-4">
               <p className="text-sm text-muted-foreground">{dashData.today_appointments} appointments today, {dashData.checked_in_patients} checked in</p>
               {pendingCheckout.length > 0 && (
-                <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-3">
+                <button
+                  type="button"
+                  onClick={() => { setScrollToPending(true); setTab('checkin') }}
+                  className="w-full cursor-pointer rounded-lg border border-emerald-200 bg-emerald-50/50 p-3 text-left transition-colors hover:bg-emerald-50"
+                >
                   <div className="flex items-center gap-2 text-sm font-medium text-emerald-800">
                     <DollarSign size={16} /> {pendingCheckout.length} pending checkout{pendingCheckout.length > 1 ? 's' : ''}
                   </div>
-                </div>
+                  <p className="mt-1 text-xs text-emerald-700/70">Click to process in Check-In / Out</p>
+                </button>
               )}
               <Button variant="outline" className="w-full gap-2" onClick={() => setTab('checkin')}>
                 <UserCheck size={16} /> Go to Check-In
@@ -403,8 +433,14 @@ export function StaffDashboard() {
                     <TableRow key={apt.id} className={cn(apt.is_urgent && 'bg-red-50/30')}>
                       <TableCell className="font-medium">{formatDate(apt.start_time, 'h:mm a')}</TableCell>
                       <TableCell>
-                        <span className="font-medium">{petNames[apt.pet_id] || 'Patient'}</span>{' '}
-                        <span className="text-xs text-muted-foreground">#{apt.pet_id.slice(0, 6)}</span>
+                        <div className="flex items-center gap-2">
+                          <Avatar className="h-8 w-8">
+                            <AvatarImage src={petPhotos[apt.pet_id] ?? undefined} alt={petNames[apt.pet_id] || 'Patient'} />
+                            <AvatarFallback className="bg-primary/10 text-xs text-primary">{petNames[apt.pet_id]?.[0]?.toUpperCase()}</AvatarFallback>
+                          </Avatar>
+                          <span className="font-medium">{petNames[apt.pet_id] || 'Patient'}</span>{' '}
+                          <span className="text-xs text-muted-foreground">#{apt.pet_id.slice(0, 6)}</span>
+                        </div>
                       </TableCell>
                       <TableCell className="text-muted-foreground capitalize">{apt.reason || 'Check-up'}</TableCell>
                       <TableCell>
@@ -432,7 +468,7 @@ export function StaffDashboard() {
             )}
           </div>
 
-          <div>
+          <div ref={pendingRef}>
             <h3 className="mb-4 text-lg font-semibold flex items-center gap-2">
               <DollarSign size={18} className="text-emerald-500" />
               Pending Checkout ({pendingCheckout.length})
@@ -449,8 +485,14 @@ export function StaffDashboard() {
                     <TableRow key={apt.id}>
                       <TableCell className="font-medium">{formatDate(apt.start_time, 'h:mm a')}</TableCell>
                       <TableCell>
-                        <span className="font-medium">{petNames[apt.pet_id] || 'Patient'}</span>{' '}
-                        <span className="text-xs text-muted-foreground">#{apt.pet_id.slice(0, 6)}</span>
+                        <div className="flex items-center gap-2">
+                          <Avatar className="h-8 w-8">
+                            <AvatarImage src={petPhotos[apt.pet_id] ?? undefined} alt={petNames[apt.pet_id] || 'Patient'} />
+                            <AvatarFallback className="bg-primary/10 text-xs text-primary">{petNames[apt.pet_id]?.[0]?.toUpperCase()}</AvatarFallback>
+                          </Avatar>
+                          <span className="font-medium">{petNames[apt.pet_id] || 'Patient'}</span>{' '}
+                          <span className="text-xs text-muted-foreground">#{apt.pet_id.slice(0, 6)}</span>
+                        </div>
                       </TableCell>
                       <TableCell className="text-muted-foreground">{apt.reason || 'Check-up'}</TableCell>
                       <TableCell>

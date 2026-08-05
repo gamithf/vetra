@@ -12,6 +12,28 @@ const Avatar = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElem
 )
 Avatar.displayName = 'Avatar'
 
+const AvatarImage = React.forwardRef<HTMLImageElement, React.ImgHTMLAttributes<HTMLImageElement>>(
+  ({ src, alt, onError, className, ...props }, ref) => {
+    const [failed, setFailed] = React.useState(false)
+    const imgSrc = src && !failed ? src : undefined
+    if (!imgSrc) return null
+    return (
+      <img
+        ref={ref}
+        src={imgSrc}
+        alt={alt}
+        onError={(e) => {
+          setFailed(true)
+          onError?.(e)
+        }}
+        className={cn('h-full w-full object-cover', className)}
+        {...props}
+      />
+    )
+  },
+)
+AvatarImage.displayName = 'AvatarImage'
+
 const AvatarFallback = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
     <div
@@ -26,4 +48,4 @@ const AvatarFallback = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTM
 )
 AvatarFallback.displayName = 'AvatarFallback'
 
-export { Avatar, AvatarFallback }
+export { Avatar, AvatarImage, AvatarFallback }

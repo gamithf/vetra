@@ -168,7 +168,7 @@ export function AgentStream({ open, transcript, petId, appointmentId, appointmen
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="flex h-[560px] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border bg-card shadow-2xl">
         <div className="flex items-center justify-between border-b px-5 py-3.5">
-          <div className="flex items-center gap-2 text-sm font-semibold">
+          <div className="flex items-center gap-2 text-sm font-semibold uppercase justify-center">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10">
               <Brain size={15} className="text-primary" />
             </span>
