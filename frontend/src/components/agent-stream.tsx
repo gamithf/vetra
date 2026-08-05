@@ -1,12 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   Brain, CheckCircle2, ClipboardList, FileText, FolderOpen, Loader2,
-  Package, Receipt, X,
+  Package, Receipt, ShieldAlert, ShieldCheck, X,
 } from 'lucide-react'
 import { AGENT_WS_URL } from '@/lib/constants'
 import { useAuth } from '@/context/auth-context'
 import { cn } from '@/lib/utils'
 import { formatCurrency } from '@/lib/format'
+
+export interface SafetyAlert {
+  drug_a: string
+  drug_b: string
+  severity: 'high' | 'medium' | 'low'
+  summary: string
+  guidance: string
+}
 
 export interface AgentSummary {
   diagnosis: string
@@ -15,6 +23,11 @@ export interface AgentSummary {
   note_id?: string
   invoice_total?: number
   inventory_log: string[]
+  safety?: {
+    risk_level: 'high' | 'medium' | 'low'
+    alerts: SafetyAlert[]
+    summary?: string
+  }
 }
 
 interface Props {
@@ -32,6 +45,7 @@ type AgentState = 'working' | 'thinking' | 'complete' | 'pending'
 const AGENTS: { key: string; label: string; icon: React.ReactNode }[] = [
   { key: 'context', label: 'Patient Context', icon: <FolderOpen size={16} /> },
   { key: 'medical', label: 'Medical Reasoning', icon: <Brain size={16} /> },
+  { key: 'safety', label: 'Clinical Safety (RAG)', icon: <ShieldCheck size={16} /> },
   { key: 'notes', label: 'Clinical Note', icon: <FileText size={16} /> },
   { key: 'records', label: 'Medical Record', icon: <ClipboardList size={16} /> },
   { key: 'inventory', label: 'Inventory', icon: <Package size={16} /> },
@@ -58,6 +72,8 @@ export function AgentStream({ open, transcript, petId, appointmentId, appointmen
   const [activeAgent, setActiveAgent] = useState<string | null>(null)
   const [summary, setSummary] = useState<AgentSummary | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [safety, setSafety] = useState<{ risk_level: 'high' | 'medium' | 'low'; alerts: SafetyAlert[]; summary?: string } | null>(null)
+  const [safetyAcked, setSafetyAcked] = useState(false)
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const liveRef = useRef<string | null>(null)
 
@@ -70,6 +86,8 @@ export function AgentStream({ open, transcript, petId, appointmentId, appointmen
     setActiveAgent(null)
     setSummary(null)
     setError(null)
+    setSafety(null)
+    setSafetyAcked(false)
     liveRef.current = null
 
     const ws = new WebSocket(AGENT_WS_URL)
@@ -103,6 +121,8 @@ export function AgentStream({ open, transcript, petId, appointmentId, appointmen
         }
       } else if (msg.type === 'result') {
         setResults((r) => ({ ...r, [msg.agent]: msg.text }))
+      } else if (msg.type === 'safety') {
+        setSafety(msg)
       } else if (msg.type === 'done') {
         setSummary(msg.summary)
         liveRef.current = null
@@ -133,6 +153,17 @@ export function AgentStream({ open, transcript, petId, appointmentId, appointmen
   const isLive = liveRef.current === view && (viewState === 'working' || viewState === 'thinking')
   const content = viewResult || (viewThinking ? viewThinking : (viewDetail || ''))
 
+  const riskLevel = safety?.risk_level
+  const safetyAlerts = safety?.alerts || []
+  const highBlocked = riskLevel === 'high' && !safetyAcked
+
+  const safetyBanner =
+    riskLevel === 'high'
+      ? { cls: 'border-red-200 bg-red-50 text-red-700', icon: <ShieldAlert size={18} className="mt-0.5 shrink-0 text-red-500" />, title: 'HIGH-RISK DRUG INTERACTION DETECTED' }
+      : riskLevel === 'medium'
+        ? { cls: 'border-amber-200 bg-amber-50 text-amber-700', icon: <ShieldAlert size={18} className="mt-0.5 shrink-0 text-amber-500" />, title: 'Potential drug interaction' }
+        : { cls: 'border-emerald-200 bg-emerald-50 text-emerald-700', icon: <ShieldCheck size={18} className="mt-0.5 shrink-0 text-emerald-500" />, title: 'Clinical safety check passed' }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="flex h-[560px] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border bg-card shadow-2xl">
@@ -152,6 +183,57 @@ export function AgentStream({ open, transcript, petId, appointmentId, appointmen
           </button>
         </div>
 
+        {safety && !highBlocked && (
+          <div className={cn('flex items-start gap-2.5 border-b px-5 py-3 text-xs', safetyBanner.cls)}>
+            {safetyBanner.icon}
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold uppercase tracking-wide">{safetyBanner.title}</p>
+              <p className="mt-0.5 text-[11px] opacity-90">{safety.summary}</p>
+              {safetyAlerts.map((a, i) => (
+                <p key={i} className="mt-1 text-[11px] opacity-90">
+                  {a.drug_a} + {a.drug_b} — {a.severity.toUpperCase()}: {a.summary}
+                </p>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {highBlocked && (
+          <div className="flex flex-1 items-center justify-center p-6">
+            <div className="w-full max-w-md rounded-2xl border-2 border-red-500 bg-white p-6 shadow-2xl">
+              <div className="flex items-start gap-3">
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-red-100">
+                  <ShieldAlert size={26} className="text-red-600" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-bold uppercase tracking-wide text-red-600">High-risk drug interaction</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    The Clinical Safety agent flagged a critical interaction against the patient's medication history.
+                  </p>
+                </div>
+              </div>
+              <div className="mt-4 space-y-2.5">
+                {safetyAlerts.map((a, i) => (
+                  <div key={i} className="rounded-xl border border-red-200 bg-red-50 p-3">
+                    <p className="text-sm font-bold text-red-700">
+                      {a.drug_a} + {a.drug_b} — HIGH
+                    </p>
+                    <p className="mt-1 text-xs text-red-700/90">{a.summary}</p>
+                    <p className="mt-1.5 text-[11px] font-medium text-red-700/80">Recommendation: {a.guidance}</p>
+                  </div>
+                ))}
+              </div>
+              <button
+                onClick={() => setSafetyAcked(true)}
+                className="mt-5 w-full cursor-pointer rounded-lg bg-red-600 py-2.5 text-sm font-bold text-white hover:bg-red-700"
+              >
+                Acknowledge & continue
+              </button>
+            </div>
+          </div>
+        )}
+
+        {!highBlocked && (
         <div className="grid flex-1 grid-cols-[200px_1fr] overflow-hidden">
           <aside className="border-r bg-muted/20 p-3">
             <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -222,14 +304,31 @@ export function AgentStream({ open, transcript, petId, appointmentId, appointmen
                         {line}
                       </span>
                     ))}
+                    {summary.safety && (
+                      <span
+                        className={cn(
+                          'rounded-full px-2.5 py-1 text-xs font-medium',
+                          summary.safety.risk_level === 'high' && 'bg-red-50 text-red-600',
+                          summary.safety.risk_level === 'medium' && 'bg-amber-50 text-amber-600',
+                          summary.safety.risk_level === 'low' && 'bg-emerald-50 text-emerald-600',
+                        )}
+                      >
+                        Safety:{' '}
+                        {summary.safety.risk_level === 'high'
+                          ? `${summary.safety.alerts.length} interaction(s) flagged`
+                          : summary.safety.risk_level === 'medium'
+                            ? 'Interaction flagged'
+                            : 'No interactions found'}
+                      </span>
+                    )}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Click any agent on the left to review exactly what it did.
+                    Click any step on the left to review details
                   </p>
                 </div>
                 <button
                   onClick={() => onDone(summary)}
-                  className="mt-auto w-full rounded-lg bg-primary py-2.5 text-sm font-medium text-primary-foreground hover:opacity-90"
+                  className="mt-auto w-full rounded-lg bg-primary py-2.5 text-sm font-medium text-primary-foreground hover:opacity-90 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Done
                 </button>
@@ -261,6 +360,7 @@ export function AgentStream({ open, transcript, petId, appointmentId, appointmen
             )}
           </div>
         </div>
+        )}
       </div>
     </div>
   )

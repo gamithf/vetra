@@ -74,12 +74,12 @@ async def seed(session: AsyncSession):
 
     # ── Users ──────────────────────────────
     users_data = [
-        {"email": "vet1@vetra.com",   "password": "password123", "full_name": "Dr. Sarah Chen",       "role": UserRole.VET,    "phone": "555-0101"},
-        {"email": "vet2@vetra.com",  "password": "password123", "full_name": "Dr. Marcus Johnson",    "role": UserRole.VET,    "phone": "555-0102"},
-        {"email": "vet3@vetra.com",  "password": "password123", "full_name": "Dr. Emily Patel",       "role": UserRole.VET,    "phone": "555-0103"},
-        {"email": "staff1@vetra.com", "password": "password123", "full_name": "Jessica Rodriguez",     "role": UserRole.STAFF,  "phone": "555-0201"},
-        {"email": "staff2@vetra.com","password": "password123", "full_name": "Michael Torres",        "role": UserRole.STAFF,  "phone": "555-0202"},
-        {"email": "admin1@vetra.com", "password": "password123", "full_name": "Admin User",            "role": UserRole.ADMIN,  "phone": "555-0001"},
+        {"email": "vet1@vetra.com",   "password": "password123", "full_name": "Dr. Kasun Perera",       "role": UserRole.VET,    "phone": "070-1010-001"},
+        {"email": "vet2@vetra.com",  "password": "password123", "full_name": "Dr. Nadeesha Fernando",    "role": UserRole.VET,    "phone": "070-1010-002"},
+        {"email": "vet3@vetra.com",  "password": "password123", "full_name": "Dr. Ruwan Bandara",        "role": UserRole.VET,    "phone": "070-1010-003"},
+        {"email": "staff1@vetra.com", "password": "password123", "full_name": "Ishara Kumari",           "role": UserRole.STAFF,  "phone": "070-1020-001"},
+        {"email": "staff2@vetra.com","password": "password123", "full_name": "Chaminda Silva",           "role": UserRole.STAFF,  "phone": "070-1020-002"},
+        {"email": "admin1@vetra.com", "password": "password123", "full_name": "Sahan De Silva",          "role": UserRole.ADMIN,  "phone": "070-1000-001"},
     ]
     users = []
     for u in users_data:
@@ -100,14 +100,14 @@ async def seed(session: AsyncSession):
 
     # ── Owners ─────────────────────────────
     owners_data = [
-        {"first_name": "Alice",   "last_name": "Thompson",   "email": "alice@example.com",   "phone": "555-1001", "address": "123 Oak St, Portland, OR"},
-        {"first_name": "Bob",     "last_name": "Martinez",   "email": "bob@example.com",     "phone": "555-1002", "address": "456 Pine Ave, Portland, OR"},
-        {"first_name": "Carol",   "last_name": "Williams",   "email": "carol@example.com",   "phone": "555-1003", "address": "789 Elm Dr, Portland, OR"},
-        {"first_name": "David",   "last_name": "Brown",      "email": "david@example.com",   "phone": "555-1004", "address": "321 Maple Ln, Portland, OR"},
-        {"first_name": "Emma",    "last_name": "Davis",      "email": "emma@example.com",    "phone": "555-1005", "address": "654 Cedar St, Portland, OR"},
-        {"first_name": "Frank",   "last_name": "Garcia",     "email": "frank@example.com",   "phone": "555-1006", "address": "987 Birch Rd, Portland, OR"},
-        {"first_name": "Grace",   "last_name": "Rodriguez",  "email": "grace@example.com",   "phone": "555-1007", "address": "159 Walnut Ave, Portland, OR"},
-        {"first_name": "Henry",   "last_name": "Wilson",     "email": "henry@example.com",   "phone": "555-1008", "address": "753 Spruce Ct, Portland, OR"},
+        {"first_name": "Anuradha",     "last_name": "Perera",        "email": "anuradha@example.com",      "phone": "94707393930", "address": "45 Flower Rd, Colombo 07"},
+        {"first_name": "Nuwan",        "last_name": "Fernando",      "email": "nuwan@example.com",         "phone": "94707393930", "address": "12 Galle Rd, Colombo 03"},
+        {"first_name": "Dilini",       "last_name": "Jayasuriya",    "email": "dilini@example.com",        "phone": "94707393930", "address": "88 Temple Rd, Kandy"},
+        {"first_name": "Sanjaya",      "last_name": "Gunasekara",    "email": "sanjaya@example.com",       "phone": "94707393930", "address": "23 Marine Drive, Colombo 06"},
+        {"first_name": "Chathurika",   "last_name": "Wickramasinghe","email": "chathurika@example.com",    "phone": "94707393930", "address": "150 Peradeniya Rd, Kandy"},
+        {"first_name": "Tharindu",     "last_name": "Rathnayake",    "email": "tharindu@example.com",      "phone": "94707393930", "address": "9 Hill St, Nuwara Eliya"},
+        {"first_name": "Nadeeja",      "last_name": "Jayawardena",   "email": "nadeeja@example.com",       "phone": "94707393930", "address": "34 Hospital Rd, Galle"},
+        {"first_name": "Asanka",       "last_name": "Weerasinghe",   "email": "asanka@example.com",        "phone": "94707393930", "address": "7 Lake Rd, Anuradhapura"},
     ]
     owners = [Owner(**o) for o in owners_data]
     session.add_all(owners)

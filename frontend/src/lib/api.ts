@@ -275,3 +275,48 @@ export const transcriptionApi = {
     return data
   },
 }
+
+// ── Public magic-link API (no auth, no redirect) ──────────
+
+const publicApiClient = axios.create({
+  baseURL: `${API_BASE_URL}${API_PREFIX}`,
+  headers: { 'Content-Type': 'application/json' },
+})
+
+export interface PublicPetView {
+  pet: {
+    id: string
+    name: string
+    species: string
+    breed: string | null
+    gender: string
+    color: string | null
+    date_of_birth: string | null
+    weight_kg: number | null
+    microchip_id: string | null
+  }
+  owner: { first_name: string; last_name: string } | null
+  appointment: {
+    id: string | null
+    reason: string | null
+    start_time: string | null
+    status: string | null
+  }
+  invoice: {
+    id: string | null
+    total_amount: number | null
+    status: string | null
+    items: { description: string; quantity: number; unit_price: number; total_price: number }[]
+  } | null
+  recent_records: {
+    record_type: string
+    diagnosis: string | null
+    treatment: string | null
+    recorded_at: string | null
+  }[]
+}
+
+export const publicApi = {
+  pet: (token: string) =>
+    publicApiClient.get<PublicPetView>(`/public/pet/${token}`).then((r) => r.data),
+}
