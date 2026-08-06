@@ -24,8 +24,10 @@ class VisitPlan(BaseModel):
     treatment: str
     record_type: str = "examination"
     structured_note: str
+    medications: list[str] = []
     inventory: list[PlanInventoryItem]
     invoice_items: list[PlanInvoiceItem]
+    follow_up_in_days: int | None = None
 
 
 class GeminiClient:
@@ -59,8 +61,14 @@ class GeminiClient:
             "- diagnosis: one concise working diagnosis.\n"
             "- treatment: recommended treatment / plan text. If the transcript mentions "
             "a follow-up, include it (e.g. 'Schedule follow-up in 7 days').\n"
+            "- follow_up_in_days: number of days until the follow-up visit (e.g. 7), "
+            "or null if no follow-up is scheduled. Only set it when the transcript "
+            "explicitly schedules a follow-up.\n"
             "- record_type: one of examination, vaccination, surgery, dental, "
             "lab_work, follow_up, emergency, other.\n"
+            "- medications: list of drug names prescribed or dispensed during this "
+            "visit, one entry per drug (e.g. 'Amoxicillin 250mg', 'Meloxicam 1.5mg'). "
+            "Use the exact drug names as dictated; include the strength if given.\n"
             "- structured_note: a clean SOAP-style clinical note summarizing the visit.\n"
             "- inventory: the items consumed or dispensed during the visit. item_name "
             "should match clinic inventory naming exactly (e.g. 'Amoxicillin 250mg', "

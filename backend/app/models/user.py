@@ -22,6 +22,7 @@ class User(SQLModel, table=True):
         sa_column=Column(SAEnum(UserRole), nullable=False, default=UserRole.STAFF)
     )
     phone: str | None = Field(sa_column=Column(String(50), default=None))
+    photo_url: str | None = Field(sa_column=Column(String(500), default=None))
     is_active: bool = Field(default=True)
     created_at: datetime = Field(
         sa_column=Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)

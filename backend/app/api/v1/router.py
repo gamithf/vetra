@@ -16,6 +16,9 @@ from app.api.v1.endpoints import (
     weight_records,
     dashboard,
     transcription,
+    public,
+    public_booking,
+    notifications,
 )
 
 router = APIRouter(prefix="/api/v1")
@@ -36,3 +39,6 @@ router.include_router(invoices.router)
 router.include_router(weight_records.router)
 router.include_router(dashboard.router)
 router.include_router(transcription.router)
+router.include_router(public.router)
+router.include_router(public_booking.router)
+router.include_router(notifications.router)

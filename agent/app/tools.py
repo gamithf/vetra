@@ -36,6 +36,10 @@ class VetraTools:
     async def get_pet(self, pet_id: str) -> dict:
         return await self._call("GET", f"/pets/{pet_id}")
 
+    async def get_pet_prescriptions(self, pet_id: str) -> list[dict]:
+        """Return the pet's prescriptions (used as the 'current medications' history)."""
+        return await self._call("GET", f"/prescriptions?pet_id={pet_id}")
+
     async def save_clinical_note(self, payload: dict) -> dict:
         return await self._call("POST", "/clinical-notes", json=payload)
 
@@ -68,6 +72,20 @@ class VetraTools:
 
     async def complete_appointment(self, appointment_id: str) -> dict:
         return await self._call("POST", f"/appointments/{appointment_id}/complete")
+
+    async def schedule_followup(self, appointment_id: str, days: int) -> dict:
+        """Create a follow-up appointment `days` from now for the pet's visit."""
+        return await self._call("POST", "/appointments/followup", json={"appointment_id": appointment_id, "days": days})
+
+    async def send_visit_notification(
+        self, appointment_id: str, diagnosis: str | None = None, treatment: str | None = None
+    ) -> dict:
+        payload = {"appointment_id": appointment_id}
+        if diagnosis:
+            payload["diagnosis"] = diagnosis
+        if treatment:
+            payload["treatment"] = treatment
+        return await self._call("POST", "/notifications/visit-summary", json=payload)
 
     @staticmethod
     def match_inventory_item(inventory: list, wanted_name: str):

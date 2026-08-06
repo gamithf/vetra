@@ -10,12 +10,14 @@ class UserCreate(BaseModel):
     full_name: str
     role: UserRole = UserRole.STAFF
     phone: str | None = None
+    photo_url: str | None = None
 
 
 class UserUpdate(BaseModel):
     email: EmailStr | None = None
     full_name: str | None = None
     phone: str | None = None
+    photo_url: str | None = None
     is_active: bool | None = None
 
 
@@ -25,6 +27,7 @@ class UserResponse(BaseModel):
     full_name: str
     role: UserRole
     phone: str | None
+    photo_url: str | None
     is_active: bool
     created_at: datetime
 

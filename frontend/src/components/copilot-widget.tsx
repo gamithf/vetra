@@ -192,7 +192,7 @@ export function CopilotWidget({ activePatientId, activePatientName, activeAppoin
       <button
         onClick={() => setExpanded(!expanded)}
         className={cn(
-          'flex items-center gap-2 rounded-full px-5 py-3 text-sm font-medium shadow-lg transition-all',
+          'flex items-center gap-2 rounded-full px-5 py-3 text-sm font-medium shadow-lg transition-all cursor-pointer',
           activePatientId ? 'bg-primary text-primary-foreground hover:opacity-90' : 'bg-muted text-muted-foreground hover:bg-accent',
           expanded && 'shadow-none',
         )}

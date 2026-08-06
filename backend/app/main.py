@@ -7,6 +7,8 @@ from app.database import init_db
 from app.realtime import manager
 import json
 
+# reload-trigger marker (public booking endpoints)
+
 settings = get_settings()
 
 
