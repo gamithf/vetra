@@ -19,8 +19,22 @@
    # Terminal 3 — frontend
    cd frontend && npm run dev
    ```
-2. Open `http://localhost:5173` in a clean browser window.
-3. Log in as **Staff** (`staff1@vetra.com` / `password123`), verify the seeded data is present, then log out.
+2. **Re-seed the database fresh** so the demo starts in the exact narrated state (use the backend venv — the seed needs `bcrypt`):
+   ```bash
+   cd backend && venv\Scripts\python.exe scripts/seed.py
+   ```
+3. Open `http://localhost:5173` in a clean browser window. Log in as **Staff** (`staff1@vetra.com` / `password123`) and as **Vet** (`vet1@vetra.com` / `password123`) once to confirm both work, then log out.
+4. **Optional — WhatsApp owner notifications.** Add your Meta Cloud API credentials to `backend/.env` so the pipeline can text the owner after a visit (Cooper's owner phone is `94707393930`):
+   ```bash
+   AK_WHATSAPP__ACCESS_TOKEN=<your token>
+   AK_WHATSAPP__PHONE_NUMBER_ID=<your number id>
+   AK_WHATSAPP__API_VERSION=v22.0
+   FRONTEND_URL=http://localhost:5173
+   ```
+   Delivery notes:
+   - **Free-form text only delivers inside a 24h session** (the owner must message the business first). To make the live demo deliver, send any message to the Vetra business number from the owner's phone within 24h of the demo, or:
+   - **Best: an approved template.** Create a `vetra_visit_summary` template in WhatsApp Manager (body with `{{1}}`…`{{8}}`: owner name, pet name, visit id, reason, diagnosis, treatment, total, link) and set `AK_WHATSAPP__TEMPLATE_NAME=vetra_visit_summary`. The pipeline then always delivers (no session needed) and the result line shows "Owner notified via template".
+   - If these are missing/unconfigured the pipeline simply reports "WhatsApp skipped" — it never fails.
 4. Window size: use **a 16:10 or 16:9 browser window**, ~1280×720 or larger. Keep the window maximized so the sidebar, queue, and floating co-pilot are all visible.
 5. Turn **on the cursor / mouse pointer** (macOS: System Settings → Accessibility → Pointer → show pointer; OBS can also highlight the cursor).
 6. Pick a recording tool (OBS, Loom, Screen Studio). Record **screen + mic**.
@@ -29,176 +43,188 @@
 
 > Tip: Have the narration lines on a second monitor or printed. Do NOT read from a script on screen.
 
+> ⚠️ The transcript is **deterministic**: when you press Stop, the exact sentence below appears automatically (no real Whisper call). Read it aloud during the recording so the narration and the on-screen text match perfectly.
+
 ---
 
 ## THE STORY IN ONE LINE
-> "Sarah arrives with her dog Max. The front desk checks him in. The vet sees him instantly, dictates the exam into an AI co-pilot, and by the time the client is at the counter, the record, the inventory, and the bill are already done."
+> "A dog with a chronic skin condition walks in. The front desk checks him in, the vet dictates the exam into an AI co-pilot, and by the time the client is at the counter, the medical record, the inventory, and the Rs. bill are already done — while the AI also catches a medication interaction."
 
 **Characters (from the seed database):**
-- **Jessica Rodriguez** — front-desk staff (`staff1@vetra.com`)
-- **Dr. Sarah Chen** — veterinarian (`vet1@vetra.com`)
-- **Alice Thompson** — pet owner
-- **Max** — Golden Retriever, male, 32.5 kg, annual wellness exam
+- **Ishara Kumari** — front-desk staff (`staff1@vetra.com` / `password123`)
+- **Dr. Kasun Perera** — veterinarian (`vet1@vetra.com` / `password123`)
+- **Nuwan Fernando** — pet owner
+- **Cooper** — Labrador Retriever, male, 28 kg, 10:00 appointment — "Severe itching — suspected atopic dermatitis"
+
+**The dictated transcript (read this aloud, it appears on screen):**
+> "Cooper has atopic dermatitis. Prescribe Amoxicillin 250mg. Check if Meloxicam interacts with Cooper's current medications. Dispensed Amoxicillin 250mg. Schedule follow-up in 7 days."
 
 ---
 
 ## ACT 1 — The Opening (0:00 – 0:30)
 
 **🎙️ Narrate:**
-> "This is Vetra — an intelligent operating system for modern veterinary clinics. We connect every part of the patient journey — from the front desk, to the exam room, to the bill — into one real-time platform. Today, a client is walking in with her dog, Max."
+> "This is Vetra — an intelligent operating system for modern veterinary clinics. It connects the front desk, the exam room, and the billing counter into one real-time platform. Today, a client is walking in with his Labrador, Cooper, who's been scratching non-stop."
 
 **🖱️ Do:**
 - On the login page, sign in as **Staff** (`staff1@vetra.com` / `password123`).
 
 **📺 Expect on screen:**
-- Staff Dashboard (Jessica Rodriguez) — Overview with stat cards (Appointments, Checked In, Low Stock, Pending Invoices).
+- Staff Dashboard (Ishara Kumari) — Overview with stat cards: Today's Appts, Checked In, **Low Stock** (amber), Pending Invoices.
 
 ---
 
-## ACT 2 — The Arrival & Check-In (0:30 – 1:25)
+## ACT 2 — The Arrival & Check-In (0:30 – 1:15)
 
 **🎙️ Narrate:**
-> "Alice arrives at the front desk with Max for his annual wellness exam. Jessica pulls up today's calendar to see the schedule at a glance."
+> "Nuwan arrives with Cooper for a 10 o'clock appointment. Ishara pulls up today's calendar to see the schedule."
 
 **🖱️ Do:**
-- Click **"Calendar"** in the left sidebar.
+- Click the **"Calendar"** tab.
 
 **📺 Expect:**
-- A grouped, date-sorted calendar showing today's visits (Max, Cooper, Bella, Buddy, Tucker).
+- A date-sorted calendar. Today shows Cooper — "Severe itching — suspected atopic dermatitis" — alongside the rest of the queue.
 
 **🎙️ Narrate:**
-> "Max is scheduled for 9:00. One click on 'Check In' sends him into the system — no paper, no retyping."
+> "One click on 'Check In' brings Cooper into the system — no paper, no retyping."
 
 **🖱️ Do:**
-- Go to **"Check-In / Out"** tab. Find **Max — Annual wellness exam** (scheduled). Click **"Check In"**.
+- Click the **"Check-In / Out"** tab. Find **Cooper** (scheduled). Click **"Check In"**.
 
 **📺 Expect:**
-- Max's status badge flips **Scheduled → Checked In** with a green toast **"Checked in"**.
-- Notice the other patients in the queue — Bella limping, and **Tucker flagged URGENT in red** (vomiting). Vetra surfaces urgency automatically.
+- Cooper's badge flips **Scheduled → Checked In** with a toast **"Checked in"**, and a new **"Send to Vet"** button appears.
 
 **🎙️ Narrate:**
-> "Notice the urgent case here — Tucker, vomiting since yesterday — is automatically flagged red so the team can triage. This is a real-time clinic."
+> "Notice Tucker, flagged red — a vomiting emergency that's automatically surfaced for triage. Vetra keeps the whole clinic in sync."
 
 ---
 
-## ACT 3 — The Handoff to the Vet (1:25 – 2:00)
+## ACT 3 — The Handoff to the Vet (1:15 – 1:55)
 
 **🎙️ Narrate:**
-> "Now let's switch to the veterinarian's view. Log out, and I'll sign in as Dr. Sarah Chen."
+> "Now let's switch to the veterinarian's view. Because the handoff happens in real time, the doctor doesn't need to hunt for the patient."
 
 **🖱️ Do:**
 - Click **log out** (top-right avatar → Logout).
-- On login, sign in as **Vet** (`vet1@vetra.com` / `password123`).
+- Sign in as **Vet** (`vet1@vetra.com` / `password123`).
 
 **📺 Expect:**
-- Vet Dashboard (Dr. Sarah Chen), Patient Queue.
+- Vet Dashboard (Dr. Kasun Perera) — Patient Queue with **Cooper near the top** (pet name + short patient ID), urgent Tucker sorted above.
 
 **🎙️ Narrate:**
-> "Because Vetra is real-time, Max is already here in the queue — and urgent cases like Tucker are sorted to the top."
+> "Cooper is already waiting in the vet's queue. Sarah opens his record — Vetra has his full history right there."
 
 **🖱️ Do:**
-- Click **Max** in the queue.
+- Click **Cooper** in the queue.
 
 **📺 Expect:**
-- Max's full medical record opens: species, weight, microchip, and his **medical timeline** (previous vaccination history).
-- The **AI Co-Pilot** floating button turns green with a pulse — it is now **automatically locked to Max**. No manual patient ID entry.
+- Cooper's EMR: species, weight (28 kg), DOB, microchip, and the **Medical Timeline** — including a past **atopic dermatitis** record and his **current Meloxicam** medication. The **AI Co-Pilot** floating button turns green with a pulse — automatically locked to Cooper.
 
 **🎙️ Narrate:**
-> "The co-pilot locks onto the active patient automatically — the doctor never has to type a patient ID."
+> "The co-pilot locks onto the active patient automatically — the doctor never types a patient ID. And note the timeline: Cooper already has a history of atopic dermatitis, and he's currently on Meloxicam. That matters in a moment."
 
 ---
 
-## ACT 4 — The Consultation + AI Co-Pilot (2:00 – 3:40)
+## ACT 4 — The Consultation + AI Co-Pilot (1:55 – 3:45)
 
 **🎙️ Narrate:**
-> "Dr. Chen starts the exam. She records the appointment, then turns to the AI co-pilot to dictate her findings."
+> "Dr. Chen starts the exam, then turns to the AI co-pilot and dictates her findings just as she would to a colleague."
 
 **🖱️ Do:**
-- Click **"Start Exam"** (Max's status → **In Progress**).
-- Click the **"AI Co-Pilot"** floating button to expand it.
+- Click the **"AI Co-Pilot"** floating button to expand it (note the **LOCKED** chip and Cooper's name).
 - Click **"Record"** (the mic).
 
 **📺 Expect:**
 - A **listening animation** — red dot + pulsing waveform bars, label "Listening...".
 
-**🎙️ Narrate (dictate the exam out loud):**
-> "Dr. Chen speaks naturally — temperature, heart rate, exam findings. The co-pilot captures it live."
+**🎙️ Narrate (read the transcript aloud into the mic):**
+> "Cooper has atopic dermatitis. Prescribe Amoxicillin 250mg. Check if Meloxicam interacts with Cooper's current medications. Dispensed Amoxicillin 250mg. Schedule follow-up in 7 days."
 
 **🖱️ Do:**
-- Click **"Stop"**. Groq Cloud's Whisper Large V3 transcribes the recording and the transcript **appears as editable text**.
-- Move the cursor over the text so the viewer sees it's editable.
+- Click **"Stop"**. The transcript appears in the textarea after a moment. Move the cursor over the text so the viewer sees it's editable.
 
 **🎙️ Narrate:**
-> "The doctor can edit anything before submitting. When she's happy, she clicks 'Submit'."
+> "The transcript lands in seconds, fully editable. The doctor can fix anything before submitting."
 
 **🖱️ Do:**
 - Click **"Submit"**.
 
 **📺 Expect — the showpiece:**
-- A full-screen **"Vetra Agent Pipeline"** overlay opens a WebSocket to the agent service. Seven agents run in sequence, each streaming **live reasoning text** as Gemini 2.5 Flash thinks:
-  1. **Patient Context** — loads Max from the backend.
-  2. **Medical Reasoning** — Gemini streams its clinical analysis, word by word.
-  3. **Clinical Note** — raw transcript + structured SOAP note saved.
-  4. **Medical Record** — diagnosis & treatment written to the timeline.
-  5. **Inventory** — DAPP vaccine (and any supplies) deducted.
-  6. **Billing** — itemized invoice lines generated.
-  7. **Finalize** — appointment marked completed.
-- Each step's checkmark flips as it finishes, and the live "thinking" pane scrolls with the current agent's output.
+- The **"Vetra Agent Pipeline"** popup opens (fixed-size panel) and opens a WebSocket to the agent service. Eight steps run in sequence — live streaming reasoning, each with a status icon in the left sidebar:
+  1. **Patient Context** — loads Cooper, and his **current medications**, from the backend.
+  2. **Medical Reasoning** — Gemini 2.5 Flash streams its clinical analysis word by word.
+  3. **Clinical Safety (RAG)** — the **Clinical Safety agent** runs a **semantic vector search over the embedded veterinary-drug index**. It pulls Cooper's current medication (**Meloxicam — NSAID**), looks up the newly-prescribed **Amoxicillin (penicillin)** by name, retrieves the relevant drug-interaction references from the index, and checks the pair. Result: an emerald **"Clinical safety check passed"** banner — "Retrieved N reference(s) — no significant interactions". (A high-risk pairing would instead trigger a red **pop-up**.)
+  4. **Clinical Note** — raw transcript + structured SOAP note saved.
+  5. **Medical Record** — diagnosis & treatment written to Cooper's timeline.
+  6. **Inventory** — deducts the dispensed **Amoxicillin 250mg**.
+  7. **Billing** — itemized invoice lines in Sri Lankan Rupees.
+  8. **Finalize** — appointment marked completed **and the owner is notified via WhatsApp** (visit ID, reason, diagnosis, bill total, and a secure link to a public pet profile page).
+- While an agent is working, a **LIVE** pulse badge shows next to its name and the right pane auto-scrolls with its streaming reasoning.
 
 **🎙️ Narrate (while agents run):**
-> "Behind the scenes, Vetra's AI agents work in sequence — powered by Gemini 2.5 Flash. They reason through the findings, draft the diagnosis and treatment plan, then write it straight into the medical record — while other agents update the inventory and pre-calculate the bill. All in a few seconds, while the vet moves on to the next patient."
+> "Watch the **Clinical Safety agent**. It runs a semantic retrieval — a vector search against Vetra's indexed veterinary-drug manual — pulling up the Meloxicam interaction references, then checking them against Amoxicillin. No significant interaction: the prescription clears. Had these been a high-risk combination, the system would raise an instant UI alert."
 
-**📺 Expect (after the pipeline):**
-- A success panel: **diagnosis**, **treatment**, the generated **bill total**, and **inventory log** chips.
-- Click **"Done"** → toast **"Visit complete — records, inventory & bill updated"**.
-- The **medical timeline gains a new record**.
-- Max's appointment flips to **Completed**.
+**📺 Expect (after the pipeline — done view):**
+- **Diagnosis** and **Treatment** summary, a **Bill** chip with the Rs. total, and **inventory log** chips (e.g. "Amoxicillin 250mg −10").
+- The hint: **"Click any agent on the left to review exactly what it did."**
+- The **"Done"** button.
+
+**🖱️ Do:**
+- Click **"Medical Reasoning"** and **"Billing"** in the left sidebar to show each step's per-agent result (the Rs. line items). Then click **"Finalize"** to show the WhatsApp owner-notification outcome ("Owner notified via template/text" or "WhatsApp skipped — …").
+- If WhatsApp is configured, glance at the owner's phone to show the delivered message.
+- Click **"Done"**.
+
+**📺 Expect:**
+- Toast **"Visit complete — records, inventory & bill updated"** plus a **"Bill generated"** toast with the Rs. total.
+- Back in the vet view, Cooper's appointment shows **Completed**; his timeline gains the new record.
 
 ---
 
-## ACT 5 — The Checkout (3:40 – 4:30)
+## ACT 5 — The Checkout (3:45 – 4:30)
 
 **🎙️ Narrate:**
-> "The visit is done. By the time Alice brings Max to the front desk, the bill is already waiting."
+> "The visit is done. By the time Nuwan reaches the front desk, the bill is already waiting — the agent created it automatically."
 
 **🖱️ Do:**
 - **Log out**, log back in as **Staff** (Jessica).
 - Go to **"Check-In / Out"** tab.
 
 **📺 Expect:**
-- A **"Pending Checkout"** section listing Max.
+- A **"Pending Checkout"** section listing **Cooper** with a green **Rs. invoice total** chip (the exact total from the pipeline).
 
 **🎙️ Narrate:**
-> "Vetra knows which completed visits still need payment — it shows Max right here. Jessica opens the checkout."
+> "Vetra knows which completed visits still need payment — Cooper is right here, with his bill already calculated."
 
 **🖱️ Do:**
-- Click **"Checkout"** on Max.
+- Click **"Checkout"** on Cooper.
 
 **📺 Expect:**
-- Checkout modal with the invoice line items generated by the agent pipeline (consultation fee, vaccine, etc.), plus a **Total**.
+- Checkout modal showing **Cooper** with his short patient ID and the invoice line items generated by the agents — **Consultation Fee** plus **10 × Amoxicillin 250mg (Rs.25 each)** — and a **Total** in rupees.
 
 **🎙️ Narrate:**
-> "The bill was built automatically from the visit — no manual entry. Jessica selects a payment method."
+> "The bill was built from the visit itself — consultation plus the ten Amoxicillin tablets the agents dispensed. No manual entry. Jessica takes the payment."
 
 **🖱️ Do:**
-- Select **"Credit Card"** (or Cash), click **"Pay"**.
+- Select a payment method (e.g. **Credit Card**), click **"Pay Rs.…"**.
 
 **📺 Expect:**
-- Success toast **"Payment processed successfully!"** — invoice now paid.
+- Success toast **"Payment processed successfully!"** — the invoice is now paid and Cooper drops off the pending list.
 
 ---
 
 ## ACT 6 — The Closing (4:30 – 5:00)
 
 **🎙️ Narrate:**
-> "And here's the payoff: everything stays in sync. The dashboard shows the visit recorded, the DAPP vaccine stock updated, and the invoice settled — all from one seamless flow."
+> "And the payoff: everything stays in sync. Let's check the inventory."
 
-**🖱️ Do (optional, if time):**
-- Open **"Inventory"** → point to **DAPP Vaccine** showing the decremented count and the **Low Stock** alerts.
-- Return to **Overview** so the viewer sees the updated stat cards.
+**🖱️ Do:**
+- Click the **"Inventory"** tab.
+
+**📺 Expect:**
+- **Amoxicillin 250mg** now shows **90 tablets** (was 100 — the 10 dispensed were deducted, with the Rs.25/tablet price shown), and **Meloxicam 1.5mg** is flagged **Low / red** — below its reorder point.
 
 **🎙️ Narrate (closing):**
-> "Vetra replaces the clipboard and the calculator with a single, real-time platform — so the team can focus on medicine, not paperwork. This is Vetra: the modern veterinary clinic."
+> "The stock was updated the moment the vet dictated — and Meloxicam is now flagged for reorder before it even becomes a problem. Vetra replaces the clipboard and the calculator with one real-time platform — so the team can focus on medicine, not paperwork. This is Vetra: the modern veterinary clinic."
 
 **📺 Expect:**
 - End card / fade to black.
@@ -207,7 +233,7 @@
 
 ## Production Tips
 
-- **Pace:** Aim for ~3 lines of narration per 30 seconds. Pause after each toast/pipeline.
+- **Pace:** Aim for ~3 lines of narration per 30 seconds. Pause after each toast and pipeline step.
 - **Pointer:** Keep the mouse cursor moving slowly and purposefully to each click — don't rush.
 - **Audio:** Use a decent mic, reduce background noise, moderate volume. Narrate confidently.
 - **Resolution:** Record at 1080p. Export 1080p MP4 (H.264).
@@ -218,10 +244,11 @@
 
 ## Rehearsal Cheat Sheet (30-sec dry run)
 
-1. Login as Staff → Calendar → Check-In/Out → Check In Max.
-2. Logout → Login as Vet → click Max → Start Exam.
-3. Expand Co-Pilot → Record → Stop → transcript appears → Submit.
-4. Watch 7-agent pipeline stream → Done → toasts → timeline updates.
-5. Logout → Staff → Check-In/Out → Pending Checkout → Checkout Max → Pay.
+1. Login as Staff → **Calendar** tab → **Check-In/Out** tab → Check In Cooper.
+2. Logout → Login as Vet → click Cooper → expand Co-Pilot (LOCKED to Cooper).
+3. Record → read the exact transcript aloud → Stop → transcript appears → Submit.
+4. Watch the 7-agent pipeline stream → click Medical Reasoning + Billing → Done → toasts.
+5. Logout → Staff → Check-In/Out → Pending Checkout → Checkout Cooper → Pay → success.
+6. Inventory tab → Amoxicillin 90 tablets, Meloxicam low-stock alert.
 
-> Verify `GEMINI_API_KEY` is set in `agent/.env` before recording — the pipeline makes real calls to Gemini 2.5 Flash. Time the pipeline: ~5–10 seconds depending on model latency. Time the transcription: a few seconds after stopping the recording. Build natural pauses around these.
+> Verify `GEMINI_API_KEY` is set in `agent/.env` before recording — the pipeline makes real calls to Gemini 2.5 Flash. Time the pipeline: ~5–10 seconds depending on model latency. The transcript is deterministic (no Whisper call) so timing is reliable. Build natural pauses around the pipeline run.

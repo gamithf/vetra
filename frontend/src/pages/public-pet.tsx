@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
-import { PawPrint, Calendar, Weight, Stethoscope, Receipt, ShieldCheck, Loader2, AlertTriangle } from 'lucide-react'
+import { PawPrint, Calendar, Weight, Stethoscope, Receipt, ShieldCheck, Loader2, AlertTriangle, CalendarDays, FileText } from 'lucide-react'
 import { publicApi, type PublicPetView } from '@/lib/api'
 import { formatCurrency } from '@/lib/format'
 import { cn } from '@/lib/utils'
+import { PublicBooking } from '@/components/public-booking'
 
 function RecordItem({ label, value }: { label: string; value: string }) {
   return (
@@ -19,6 +20,7 @@ export function PublicPetPage() {
   const [data, setData] = useState<PublicPetView | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [view, setView] = useState<'booking' | 'summary'>('booking')
 
   useEffect(() => {
     if (!token) {
@@ -57,6 +59,11 @@ export function PublicPetPage() {
 
   const { pet, owner, appointment, invoice, recent_records } = data
 
+  const tabs = [
+    { id: 'booking', label: 'Appointments & Booking', icon: <CalendarDays size={15} /> },
+    { id: 'summary', label: 'Visit Summary & Bill', icon: <FileText size={15} /> },
+  ] as const
+
   return (
     <div className="min-h-screen bg-muted/20 py-10">
       <div className="mx-auto w-full max-w-2xl space-y-4 px-4">
@@ -72,6 +79,24 @@ export function PublicPetPage() {
           </span>
         </header>
 
+        <div className="flex gap-1 rounded-xl bg-muted p-1">
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setView(t.id)}
+              className={cn(
+                'flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all cursor-pointer',
+                view === t.id ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {t.icon}{t.label}
+            </button>
+          ))}
+        </div>
+
+        {view === 'booking' && token && <PublicBooking token={token} />}
+
+        {view === 'summary' && (<>
         <div className="rounded-2xl border bg-card p-6 shadow-lg">
           <div className="flex items-center gap-4">
             <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-2xl font-bold text-primary">
@@ -169,6 +194,7 @@ export function PublicPetPage() {
         <p className="pb-6 pt-2 text-center text-[11px] text-muted-foreground">
           This page contains private pet information. Do not share this link.
         </p>
+        </>)}
       </div>
     </div>
   )

@@ -228,7 +228,26 @@ async def run_pipeline(emit, payload: dict):
     except Exception as exc:  # noqa: BLE001
         notify_lines.append(f"WhatsApp notify failed: {str(exc)[:120]}")
 
+    follow_up_lines = []
+    follow_up_at = None
+    if plan.follow_up_in_days:
+        await _emit(emit, {"type": "agent", "agent": "finalize", "status": "thinking", "detail": f"Scheduling a follow-up in {plan.follow_up_in_days} day(s)..."})
+        try:
+            fu = await tools.schedule_followup(appointment_id, plan.follow_up_in_days)
+            follow_up_at = fu.get("start_time")
+            notify_lines.append(f"A follow-up for {context['pet_name']} was scheduled automatically.")
+            if follow_up_at:
+                from datetime import datetime
+                ts = datetime.fromisoformat(follow_up_at.replace("Z", "+00:00"))
+                follow_up_lines = [f"Follow-up scheduled for {context['pet_name']} on {ts.strftime('%Y-%m-%d %H:%M')} UTC."]
+            else:
+                follow_up_lines = [f"Follow-up scheduled for {context['pet_name']}."]
+        except Exception as exc:  # noqa: BLE001
+            follow_up_lines = [f"Follow-up scheduling failed: {str(exc)[:120]}"]
+
     finalize_text = f"Appointment completed — {context['pet_name']} is ready for checkout.\n" + "\n".join(notify_lines)
+    if follow_up_lines:
+        finalize_text += "\n" + "\n".join(follow_up_lines)
     await _emit(emit, {"type": "agent", "agent": "finalize", "status": "complete", "detail": "Appointment completed"})
     await _emit(emit, {"type": "result", "agent": "finalize", "text": finalize_text})
 
@@ -241,6 +260,7 @@ async def run_pipeline(emit, payload: dict):
             "note_id": note_id,
             "invoice_total": total,
             "inventory_log": inventory_log,
+            "follow_up_at": follow_up_at,
             "safety": {
                 "risk_level": safety.risk_level,
                 "alerts": [a.to_dict() for a in safety.alerts],

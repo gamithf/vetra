@@ -73,6 +73,10 @@ class VetraTools:
     async def complete_appointment(self, appointment_id: str) -> dict:
         return await self._call("POST", f"/appointments/{appointment_id}/complete")
 
+    async def schedule_followup(self, appointment_id: str, days: int) -> dict:
+        """Create a follow-up appointment `days` from now for the pet's visit."""
+        return await self._call("POST", "/appointments/followup", json={"appointment_id": appointment_id, "days": days})
+
     async def send_visit_notification(
         self, appointment_id: str, diagnosis: str | None = None, treatment: str | None = None
     ) -> dict:

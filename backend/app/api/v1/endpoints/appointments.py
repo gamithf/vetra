@@ -296,6 +296,62 @@ class CreateInvoicePayload(BaseModel):
     items: list[InvoiceItemPayload] | None = None
 
 
+class FollowupPayload(BaseModel):
+    appointment_id: uuid.UUID
+    days: int = 7
+
+
+@router.post("/followup", response_model=AppointmentResponse, status_code=201)
+async def schedule_followup_appointment(
+    body: FollowupPayload,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Create a follow-up appointment in `days` days from a completed visit.
+
+    Idempotent: if a future follow-up already exists for the pet it is returned
+    instead of creating a duplicate (safe to call on pipeline re-runs).
+    """
+    src = await session.get(Appointment, body.appointment_id)
+    if not src:
+        raise NotFoundError("Appointment not found")
+    if not src.vet_id:
+        raise BadRequestError("Source appointment has no assigned veterinarian")
+
+    existing_result = await session.execute(
+        select(Appointment)
+        .where(Appointment.pet_id == src.pet_id)
+        .where(Appointment.status == AppointmentStatus.SCHEDULED)
+        .where(Appointment.reason.ilike("Follow-up%"))
+        .where(Appointment.start_time > datetime.now(timezone.utc))
+        .order_by(Appointment.start_time.desc())
+        .limit(1)
+    )
+    existing = existing_result.scalar_one_or_none()
+    if existing:
+        return AppointmentResponse.model_validate(existing)
+
+    from app.services.scheduling import schedule_followup
+
+    follow = await schedule_followup(
+        session,
+        src.pet_id,
+        src.owner_id,
+        src.vet_id,
+        body.days,
+        reason="Follow-up visit",
+        notes="Auto-scheduled follow-up from AI visit summary",
+    )
+    await session.commit()
+    await session.refresh(follow)
+    await manager.broadcast({
+        "type": "appointment.created",
+        "appointment_id": str(follow.id),
+        "pet_id": str(follow.pet_id),
+    })
+    return AppointmentResponse.model_validate(follow)
+
+
 @router.post("/{appointment_id}/create-invoice", response_model=InvoiceWithItemsResponse)
 async def create_invoice_for_appointment(
     appointment_id: uuid.UUID,

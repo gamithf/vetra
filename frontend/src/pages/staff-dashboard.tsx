@@ -247,7 +247,7 @@ export function StaffDashboard() {
     ws.onmessage = (e) => {
       try {
         const msg = JSON.parse(e.data)
-        if (msg.type === 'invoice.created' || msg.type === 'appointment.completed' || msg.type === 'appointment.checked_in' || msg.type === 'appointment.started') {
+        if (msg.type === 'invoice.created' || msg.type === 'appointment.completed' || msg.type === 'appointment.checked_in' || msg.type === 'appointment.started' || msg.type === 'appointment.created' || msg.type === 'appointment.updated') {
           load()
         }
       } catch { /* ignore malformed frames */ }

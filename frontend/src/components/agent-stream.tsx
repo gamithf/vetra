@@ -339,11 +339,11 @@ export function AgentStream({ open, transcript, petId, appointmentId, appointmen
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     {view ? (AGENTS.find((a) => a.key === view)?.label || view) : 'Agents working...'}
                   </p>
-                  {isLive && (
+                  {/* {isLive && (
                     <span className="flex items-center gap-1.5 text-[10px] font-medium text-primary">
                       <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" /> LIVE
                     </span>
-                  )}
+                  )} */}
                 </div>
                 <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto rounded-lg border bg-muted/40 p-3">
                   <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-foreground/90">
