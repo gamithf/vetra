@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     AK_WHATSAPP__TEMPLATE_NAME: str = os.getenv("AK_WHATSAPP__TEMPLATE_NAME", "")
     AK_WHATSAPP__TEMPLATE_LANGUAGE: str = os.getenv("AK_WHATSAPP__TEMPLATE_LANGUAGE", "en_US")
 
+    # Public base URL of this API (used to build absolute asset URLs like pet photos)
+    PUBLIC_BASE_URL: str = os.getenv("PUBLIC_BASE_URL", "http://localhost:8000")
+
     # Public magic links / notification URLs
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:5173")
     NOTIFICATION_SECRET: str = os.getenv("NOTIFICATION_SECRET", "vetra-notification-secret")

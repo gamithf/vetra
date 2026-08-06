@@ -121,8 +121,7 @@ async def seed(session: AsyncSession):
         {"owner_id": owners[0].id, "name": "Max",       "species": PetSpecies.DOG,     "breed": "Golden Retriever",  "gender": PetGender.MALE,   "date_of_birth": date(2020, 3, 15),  "weight_kg": 32.5, "color": "Golden",     "microchip_id": "MC-10001"},
         {"owner_id": owners[0].id, "name": "Luna",      "species": PetSpecies.CAT,     "breed": "Siamese",          "gender": PetGender.FEMALE, "date_of_birth": date(2021, 7, 22),  "weight_kg": 4.2,  "color": "Cream",      "microchip_id": "MC-10002"},
         {"owner_id": owners[1].id, "name": "Cooper",    "species": PetSpecies.DOG,     "breed": "Labrador Retriever","gender": PetGender.MALE,   "date_of_birth": date(2019, 11, 5),  "weight_kg": 28.0, "color": "Chocolate",  "microchip_id": "MC-10003"},
-        {"owner_id": owners[1].id, "name": "Charlie",   "species": PetSpecies.CAT,     "breed": "Maine Coon",       "gender": PetGender.MALE,   "date_of_birth": date(2022, 1, 10),  "weight_kg": 6.1,  "color": "Tabby",      "microchip_id": "MC-10004"},
-        {"owner_id": owners[2].id, "name": "Bella",     "species": PetSpecies.DOG,     "breed": "Beagle",           "gender": PetGender.FEMALE, "date_of_birth": date(2021, 5, 18),  "weight_kg": 12.8, "color": "Tricolor",   "microchip_id": "MC-10005"},
+        {"owner_id": owners[2].id, "name": "Bella",     "species": PetSpecies.CAT,     "breed": "Siamese",           "gender": PetGender.FEMALE, "date_of_birth": date(2021, 5, 18),  "weight_kg": 12.8, "color": "Tricolor",   "microchip_id": "MC-10005"},
         {"owner_id": owners[2].id, "name": "Rocky",     "species": PetSpecies.RABBIT,  "breed": "Holland Lop",      "gender": PetGender.MALE,   "date_of_birth": date(2023, 2, 28),  "weight_kg": 1.8,  "color": "White",      "microchip_id": None},
         {"owner_id": owners[3].id, "name": "Daisy",     "species": PetSpecies.DOG,     "breed": "Cocker Spaniel",   "gender": PetGender.FEMALE, "date_of_birth": date(2020, 9, 3),   "weight_kg": 14.2, "color": "Golden",     "microchip_id": "MC-10006"},
         {"owner_id": owners[3].id, "name": "Milo",      "species": PetSpecies.CAT,     "breed": "Persian",          "gender": PetGender.MALE,   "date_of_birth": date(2022, 6, 14),  "weight_kg": 5.0,  "color": "White",      "microchip_id": "MC-10007"},
@@ -136,11 +135,13 @@ async def seed(session: AsyncSession):
         {"owner_id": owners[7].id, "name": "Pepper",    "species": PetSpecies.CAT,     "breed": "Calico",           "gender": PetGender.FEMALE, "date_of_birth": date(2022, 4, 17),  "weight_kg": 4.0,  "color": "Calico",     "microchip_id": "MC-10014"},
     ]
 
+    pet_photos = {
+        PetSpecies.DOG: f"{settings.PUBLIC_BASE_URL.rstrip('/')}/static/pets/dog-svgrepo-com.svg",
+        PetSpecies.CAT: f"{settings.PUBLIC_BASE_URL.rstrip('/')}/static/pets/cat-svgrepo-com.svg",
+    }
+
     pets = [
-        Pet(
-            **p, 
-            photo_url=f"https://api.dicebear.com/10.x/clay/svg?seed={'san5qay1' if p['species'] == PetSpecies.DOG else '1i24pkjs' if p['species'] == PetSpecies.CAT else '7ix9npmr'}"
-        ) 
+        Pet(**p, photo_url=pet_photos.get(p["species"]))
         for p in pets_data
     ]
 
@@ -294,8 +295,6 @@ async def seed(session: AsyncSession):
         {"appointment_id": appointments[9].id,  "owner_id": owners[0].id, "pet_id": pets[0].id,  "total_amount": 1800.00, "paid_amount": 1800.00, "status": InvoiceStatus.PAID,        "payment_method": PaymentMethod.CREDIT_CARD, "paid_at": dt(-30)},
         {"appointment_id": appointments[10].id, "owner_id": owners[2].id, "pet_id": pets[4].id,  "total_amount": 3700.00, "paid_amount": 3700.00, "status": InvoiceStatus.PAID,        "payment_method": PaymentMethod.CASH,         "paid_at": dt(-14)},
         {"appointment_id": appointments[11].id, "owner_id": owners[4].id, "pet_id": pets[8].id,  "total_amount": 1300.00, "paid_amount": 1300.00, "status": InvoiceStatus.PAID,        "payment_method": PaymentMethod.DEBIT_CARD,   "paid_at": dt(-7)},
-        {"appointment_id": None,                "owner_id": owners[3].id, "pet_id": pets[6].id,  "total_amount": 20000.00,"paid_amount": 8000.00, "status": InvoiceStatus.PARTIALLY_PAID, "payment_method": None,                        "paid_at": None},
-        {"appointment_id": None,                "owner_id": owners[5].id, "pet_id": pets[10].id, "total_amount": 2500.00, "paid_amount": 0.00,   "status": InvoiceStatus.PENDING,     "payment_method": None,                        "paid_at": None},
     ]
     invoices = [Invoice(**i) for i in invoices_data]
     session.add_all(invoices)
