@@ -1,23 +1,41 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
   Calendar, Package, AlertTriangle, CheckCircle2, Clock, Plus, Search,
   LogOut, Pill, Syringe, ShoppingCart, DollarSign, FileText,
-  Loader2, PawPrint, UserCheck, Users, Ambulance,
+  Loader2, PawPrint, UserCheck, Users, Ambulance, Receipt,
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import type { Appointment, InventoryItem, StaffDashboard } from '@/lib/api'
-import { useApi } from '@/lib/use-api'
+import type { Appointment, InventoryItem, Pet, StaffDashboard } from '@/lib/api'
+import { appointmentsApi, inventoryApi, dashboardApi, petsApi, invoicesApi } from '@/lib/api'
+import { WS_URL } from '@/lib/constants'
+import { formatMoney } from '@/lib/format'
 import { EmergencyIntakeModal } from '@/components/emergency-intake-modal'
 import { CheckoutModal } from '@/components/checkout-modal'
 import { useAuth } from '@/context/auth-context'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+
+function usePetNames() {
+  const [names, setNames] = useState<Record<string, string>>({})
+  const [photos, setPhotos] = useState<Record<string, string | null>>({})
+  useEffect(() => {
+    petsApi.list({}).then((pets: Pet[]) => {
+      const n: Record<string, string> = {}
+      const ph: Record<string, string | null> = {}
+      pets.forEach((p) => { n[p.id] = p.name; ph[p.id] = p.photo_url })
+      setNames(n)
+      setPhotos(ph)
+    }).catch(() => {})
+  }, [])
+  return { names, photos }
+}
 
 const statusConfig: Record<string, { label: string; variant: 'secondary' | 'default' | 'destructive' | 'outline' }> = {
   scheduled: { label: 'Scheduled', variant: 'secondary' },
@@ -38,18 +56,23 @@ function formatDate(d: string, pattern: string): string {
   const min = date.getMinutes().toString().padStart(2, '0')
   const h12 = h % 12 || 12
   const ampm = h >= 12 ? 'PM' : 'AM'
-  return pattern
-    .replace('yyyy-MM-dd', `${y}-${(mm + 1).toString().padStart(2, '0')}-${dd.toString().padStart(2, '0')}`)
-    .replace('h:mm a', `${h12}:${min} ${ampm}`)
-    .replace('h:mm', `${h12}:${min}`)
-    .replace('MMM d', `${months[mm]} ${dd}`)
-    .replace('EEEE, MMMM d, yyyy', `${days[date.getDay()]}, ${['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][mm]} ${dd}, ${y}`)
+  // Longest/most-specific tokens must be replaced first so shorter
+  // substrings (e.g. 'MMM d' inside 'MMMM d') don't corrupt the result.
+  let out = pattern
+  out = out.replace('EEEE, MMMM d, yyyy', `${days[date.getDay()]}, ${['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][mm]} ${dd}, ${y}`)
+  out = out.replace('MMMM d, yyyy', `${['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][mm]} ${dd}, ${y}`)
+  out = out.replace('MMMM d', `${['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][mm]} ${dd}`)
+  out = out.replace('yyyy-MM-dd', `${y}-${(mm + 1).toString().padStart(2, '0')}-${dd.toString().padStart(2, '0')}`)
+  out = out.replace('h:mm a', `${h12}:${min} ${ampm}`)
+  out = out.replace('h:mm', `${h12}:${min}`)
+  out = out.replace('MMM d', `${months[mm]} ${dd}`)
+  return out
 }
 
 function CalendarView() {
-  const { appointmentsApi } = useApi()
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [loading, setLoading] = useState(true)
+  const { names: petNames, photos: petPhotos } = usePetNames()
   useEffect(() => {
     appointmentsApi.list().then(setAppointments).catch(() => toast.error('Failed to load')).finally(() => setLoading(false))
   }, [])
@@ -75,13 +98,19 @@ function CalendarView() {
             <div className="space-y-2">
               {grouped[date].map((apt) => (
                 <div key={apt.id} className={cn('flex items-center justify-between rounded-lg border p-3', apt.is_urgent && 'border-l-4 border-l-red-500')}>
-                  <div className="flex items-center gap-4">
-                    <div className="flex min-w-[60px] flex-col items-center">
-                      <span className="text-sm font-bold">{formatDate(apt.start_time, 'h:mm')}</span>
-                      <span className="text-xs text-muted-foreground">{formatDate(apt.start_time, 'h:mm a').split(' ')[1]}</span>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium">#{apt.pet_id.slice(0, 8)}</p>
+<div className="flex items-center gap-4">
+                      <div className="flex min-w-[60px] flex-col items-center">
+                        <span className="text-sm font-bold">{formatDate(apt.start_time, 'h:mm')}</span>
+                        <span className="text-xs text-muted-foreground">{formatDate(apt.start_time, 'h:mm a').split(' ')[1]}</span>
+                      </div>
+                      <Avatar className="h-10 w-10">
+                        <AvatarImage src={petPhotos[apt.pet_id] ?? undefined} alt={petNames[apt.pet_id] || 'Patient'} />
+                        <AvatarFallback className="bg-primary/10 text-primary">{petNames[apt.pet_id]?.[0]?.toUpperCase()}</AvatarFallback>
+                      </Avatar>
+                      <div>
+                      <p className="text-sm font-medium">
+                        {petNames[apt.pet_id] || 'Patient'} <span className="text-xs font-normal text-muted-foreground">#{apt.pet_id.slice(0, 6)}</span>
+                      </p>
                       <p className="text-xs text-muted-foreground">{apt.reason || 'Check-up'}</p>
                     </div>
                   </div>
@@ -97,7 +126,6 @@ function CalendarView() {
 }
 
 function InventoryView() {
-  const { inventoryApi } = useApi()
   const [items, setItems] = useState<InventoryItem[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -132,13 +160,14 @@ function InventoryView() {
       </div>
       <Table>
         <TableHeader>
-          <TableRow><TableHead>Item</TableHead><TableHead>Category</TableHead><TableHead>Quantity</TableHead><TableHead>Min.</TableHead><TableHead>Status</TableHead></TableRow>
+          <TableRow><TableHead>Item</TableHead><TableHead>Category</TableHead><TableHead>Price</TableHead><TableHead>Quantity</TableHead><TableHead>Min.</TableHead><TableHead>Status</TableHead></TableRow>
         </TableHeader>
         <TableBody>
           {normal.map((item) => (
             <TableRow key={item.id}>
               <TableCell className="font-medium">{item.name}</TableCell>
               <TableCell className="capitalize"><div className="flex items-center gap-2">{catIcons[item.category]}{item.category}</div></TableCell>
+              <TableCell className="tabular-nums">{item.price_per_unit ? formatMoney(item.price_per_unit) : '—'} / {item.unit}</TableCell>
               <TableCell>{item.quantity} {item.unit}</TableCell>
               <TableCell>{item.min_quantity}</TableCell>
               <TableCell><Badge variant="outline" className="gap-1"><CheckCircle2 size={12} /> In Stock</Badge></TableCell>
@@ -148,12 +177,13 @@ function InventoryView() {
             <TableRow key={item.id} className="bg-red-50/30">
               <TableCell className="font-medium">{item.name}</TableCell>
               <TableCell className="capitalize"><div className="flex items-center gap-2">{catIcons[item.category]}{item.category}</div></TableCell>
+              <TableCell className="tabular-nums">{item.price_per_unit ? formatMoney(item.price_per_unit) : '—'} / {item.unit}</TableCell>
               <TableCell className="font-bold text-red-600">{item.quantity} {item.unit}</TableCell>
               <TableCell>{item.min_quantity}</TableCell>
               <TableCell><Badge variant="destructive" className="gap-1"><AlertTriangle size={12} /> Low</Badge></TableCell>
             </TableRow>
           ))}
-          {filtered.length === 0 && <TableRow><TableCell colSpan={5} className="py-10 text-center text-muted-foreground">No items found</TableCell></TableRow>}
+          {filtered.length === 0 && <TableRow><TableCell colSpan={6} className="py-10 text-center text-muted-foreground">No items found</TableCell></TableRow>}
         </TableBody>
       </Table>
     </div>
@@ -161,7 +191,6 @@ function InventoryView() {
 }
 
 export function StaffDashboard() {
-  const { appointmentsApi, dashboardApi } = useApi()
   const [searchParams] = useSearchParams()
   const tab = searchParams.get('tab') || 'overview'
   const [dashData, setDashData] = useState<StaffDashboard>({ today_appointments: 0, low_stock_items: 0, pending_invoices: 0, checked_in_patients: 0 })
@@ -171,23 +200,60 @@ export function StaffDashboard() {
   const [emergencyOpen, setEmergencyOpen] = useState(false)
   const [checkoutAppt, setCheckoutAppt] = useState<Appointment | null>(null)
   const [pendingCheckout, setPendingCheckout] = useState<Appointment[]>([])
+  const [invoiceTotals, setInvoiceTotals] = useState<Record<string, number>>({})
+  const [scrollToPending, setScrollToPending] = useState(false)
+  const pendingRef = useRef<HTMLDivElement>(null)
+  const { names: petNames, photos: petPhotos } = usePetNames()
   const { user } = useAuth()
+
+  useEffect(() => {
+    if (scrollToPending && tab === 'checkin') {
+      pendingRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      setScrollToPending(false)
+    }
+  }, [scrollToPending, tab])
 
   const load = useCallback(async () => {
     try {
       const [dash, apps, pending] = await Promise.all([
         dashboardApi.staff(),
-        appointmentsApi.list({}),
+        appointmentsApi.today(),
         appointmentsApi.pendingCheckout(),
       ])
       setDashData(dash)
       setAppointments(apps)
       setPendingCheckout(pending)
+      Promise.all(
+        pending.map((apt) =>
+          invoicesApi.getByAppointment(apt.id)
+            .then((inv) => ({ id: apt.id, total: inv.total_amount }))
+            .catch(() => null),
+        ),
+      ).then((rows) => {
+        const m: Record<string, number> = {}
+        rows.forEach((r) => { if (r) m[r.id] = r.total })
+        setInvoiceTotals(m)
+      })
     } catch { toast.error('Failed to load dashboard') }
     finally { setLoading(false) }
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  // Live updates: staff dashboard refreshes when the agent finalizes a visit
+  // (invoice.created / appointment.completed) without a manual refresh.
+  useEffect(() => {
+    const ws = new WebSocket(WS_URL)
+    ws.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data)
+        if (msg.type === 'invoice.created' || msg.type === 'appointment.completed' || msg.type === 'appointment.checked_in' || msg.type === 'appointment.started' || msg.type === 'appointment.created' || msg.type === 'appointment.updated') {
+          load()
+        }
+      } catch { /* ignore malformed frames */ }
+    }
+    return () => ws.close()
+  }, [load])
 
   const handleCheckIn = async (id: string) => {
     setProcessing(id)
@@ -224,9 +290,17 @@ export function StaffDashboard() {
   return (
     <div className="animate-in space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Welcome, {user?.full_name?.split(' ')[0]}</h1>
-          <p className="text-muted-foreground">Manage your clinic operations</p>
+        <div className="flex items-center gap-3">
+          <Avatar className="h-11 w-11 border">
+            <AvatarImage src={user?.photo_url ?? undefined} alt={user?.full_name} />
+            <AvatarFallback className="bg-primary/10 text-primary">
+              {user?.full_name?.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)}
+            </AvatarFallback>
+          </Avatar>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Welcome, {user?.full_name?.split(' ')[0]}</h1>
+            <p className="text-muted-foreground">Manage your clinic operations</p>
+          </div>
         </div>
         <div className="flex gap-2">
           <Button onClick={() => setEmergencyOpen(true)} variant="destructive" className="gap-2">
@@ -284,7 +358,7 @@ export function StaffDashboard() {
             key={t.id}
             onClick={() => setTab(t.id)}
             className={cn(
-              'flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-all whitespace-nowrap',
+              'flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-all whitespace-nowrap cursor-pointer',
               tab === t.id ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
             )}
           >{t.icon}{t.label}</button>
@@ -315,11 +389,16 @@ export function StaffDashboard() {
             <CardContent className="space-y-4">
               <p className="text-sm text-muted-foreground">{dashData.today_appointments} appointments today, {dashData.checked_in_patients} checked in</p>
               {pendingCheckout.length > 0 && (
-                <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-3">
+                <button
+                  type="button"
+                  onClick={() => { setScrollToPending(true); setTab('checkin') }}
+                  className="w-full cursor-pointer rounded-lg border border-emerald-200 bg-emerald-50/50 p-3 text-left transition-colors hover:bg-emerald-50"
+                >
                   <div className="flex items-center gap-2 text-sm font-medium text-emerald-800">
                     <DollarSign size={16} /> {pendingCheckout.length} pending checkout{pendingCheckout.length > 1 ? 's' : ''}
                   </div>
-                </div>
+                  <p className="mt-1 text-xs text-emerald-700/70">Click to process in Check-In / Out</p>
+                </button>
               )}
               <Button variant="outline" className="w-full gap-2" onClick={() => setTab('checkin')}>
                 <UserCheck size={16} /> Go to Check-In
@@ -353,7 +432,16 @@ export function StaffDashboard() {
                   {activeApps.map((apt) => (
                     <TableRow key={apt.id} className={cn(apt.is_urgent && 'bg-red-50/30')}>
                       <TableCell className="font-medium">{formatDate(apt.start_time, 'h:mm a')}</TableCell>
-                      <TableCell><span className="font-medium">#{apt.pet_id.slice(0, 8)}</span></TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Avatar className="h-8 w-8">
+                            <AvatarImage src={petPhotos[apt.pet_id] ?? undefined} alt={petNames[apt.pet_id] || 'Patient'} />
+                            <AvatarFallback className="bg-primary/10 text-xs text-primary">{petNames[apt.pet_id]?.[0]?.toUpperCase()}</AvatarFallback>
+                          </Avatar>
+                          <span className="font-medium">{petNames[apt.pet_id] || 'Patient'}</span>{' '}
+                          <span className="text-xs text-muted-foreground">#{apt.pet_id.slice(0, 6)}</span>
+                        </div>
+                      </TableCell>
                       <TableCell className="text-muted-foreground capitalize">{apt.reason || 'Check-up'}</TableCell>
                       <TableCell>
                         <Badge variant={statusConfig[apt.status]?.variant || 'secondary'}>{statusConfig[apt.status]?.label || apt.status}</Badge>
@@ -380,24 +468,42 @@ export function StaffDashboard() {
             )}
           </div>
 
-          <div>
+          <div ref={pendingRef}>
             <h3 className="mb-4 text-lg font-semibold flex items-center gap-2">
               <DollarSign size={18} className="text-emerald-500" />
               Pending Checkout ({pendingCheckout.length})
             </h3>
             {pendingCheckout.length === 0 ? (
-              <Card><CardContent className="flex flex-col items-center py-12"><DollarSign size={40} className="mb-3 text-muted-foreground/30" /><p className="font-medium">No pending checkouts</p><p className="text-sm text-muted-foreground">All completed appointments have been invoiced</p></CardContent></Card>
+              <Card><CardContent className="flex flex-col items-center py-12"><DollarSign size={40} className="mb-3 text-muted-foreground/30" /><p className="font-medium">No pending checkouts</p><p className="text-sm text-muted-foreground">All completed visits have been paid</p></CardContent></Card>
             ) : (
               <Table>
                 <TableHeader>
-                  <TableRow><TableHead>Time</TableHead><TableHead>Patient</TableHead><TableHead>Reason</TableHead><TableHead className="text-right">Action</TableHead></TableRow>
+                  <TableRow><TableHead>Time</TableHead><TableHead>Patient</TableHead><TableHead>Reason</TableHead><TableHead>Invoice</TableHead><TableHead className="text-right">Action</TableHead></TableRow>
                 </TableHeader>
                 <TableBody>
                   {pendingCheckout.map((apt) => (
                     <TableRow key={apt.id}>
                       <TableCell className="font-medium">{formatDate(apt.start_time, 'h:mm a')}</TableCell>
-                      <TableCell><span className="font-medium">#{apt.pet_id.slice(0, 8)}</span></TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Avatar className="h-8 w-8">
+                            <AvatarImage src={petPhotos[apt.pet_id] ?? undefined} alt={petNames[apt.pet_id] || 'Patient'} />
+                            <AvatarFallback className="bg-primary/10 text-xs text-primary">{petNames[apt.pet_id]?.[0]?.toUpperCase()}</AvatarFallback>
+                          </Avatar>
+                          <span className="font-medium">{petNames[apt.pet_id] || 'Patient'}</span>{' '}
+                          <span className="text-xs text-muted-foreground">#{apt.pet_id.slice(0, 6)}</span>
+                        </div>
+                      </TableCell>
                       <TableCell className="text-muted-foreground">{apt.reason || 'Check-up'}</TableCell>
+                      <TableCell>
+                        {invoiceTotals[apt.id] !== undefined ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                            <Receipt size={12} /> {formatMoney(invoiceTotals[apt.id])}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">Awaiting invoice</span>
+                        )}
+                      </TableCell>
                       <TableCell className="text-right">
                         <Button size="sm" onClick={() => setCheckoutAppt(apt)} className="gap-1.5">
                           <DollarSign size={14} /> Checkout
@@ -413,7 +519,13 @@ export function StaffDashboard() {
       )}
 
       <EmergencyIntakeModal open={emergencyOpen} onClose={() => setEmergencyOpen(false)} onSuccess={load} />
-      <CheckoutModal appointment={checkoutAppt} open={!!checkoutAppt} onClose={() => setCheckoutAppt(null)} onSuccess={load} />
+      <CheckoutModal
+        appointment={checkoutAppt}
+        petName={checkoutAppt ? petNames[checkoutAppt.pet_id] : null}
+        open={!!checkoutAppt}
+        onClose={() => setCheckoutAppt(null)}
+        onSuccess={load}
+      />
     </div>
   )
 }

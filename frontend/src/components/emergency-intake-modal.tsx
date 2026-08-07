@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import type { Owner, Pet } from '@/lib/api'
-import { useApi } from '@/lib/use-api'
+import { ownersApi, petsApi, appointmentsApi } from '@/lib/api'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 
@@ -15,7 +15,6 @@ interface Props {
 }
 
 export function EmergencyIntakeModal({ open, onClose, onSuccess }: Props) {
-  const { ownersApi, petsApi, appointmentsApi } = useApi()
   const [step, setStep] = useState<'owner' | 'pet' | 'reason'>('owner')
   const [owners, setOwners] = useState<Owner[]>([])
   const [pets, setPets] = useState<Pet[]>([])

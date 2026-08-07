@@ -1,16 +1,17 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   Clock, AlertTriangle, Activity, Weight, Syringe, Beaker, FileText,
-  ChevronRight, PawPrint, Loader2, CheckCircle2, Pill, Calendar,
-  PlayCircle, RefreshCw,
+  ChevronRight, PawPrint, CheckCircle2, Pill, Calendar,
+  RefreshCw,
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import type { Appointment, Pet, MedicalRecord, VetDashboard } from '@/lib/api'
-import { useApi } from '@/lib/use-api'
+import { appointmentsApi, dashboardApi, petsApi } from '@/lib/api'
+import { WS_URL } from '@/lib/constants'
 import { CopilotWidget } from '@/components/copilot-widget'
 import { useAuth } from '@/context/auth-context'
 import { toast } from 'sonner'
@@ -30,10 +31,11 @@ function formatTime(d: string) {
 }
 
 function AppointmentCard({
-  appointment, petName, selected, onClick, popIn,
+  appointment, petName, petPhoto, selected, onClick, popIn,
 }: {
   appointment: Appointment
   petName: string
+  petPhoto: string | null
   selected: boolean
   onClick: () => void
   popIn: boolean
@@ -46,6 +48,7 @@ function AppointmentCard({
         'flex cursor-pointer items-center gap-4 rounded-lg border p-4 transition-all duration-200 hover:shadow-md',
         appointment.is_urgent && 'border-l-4 border-l-red-500 bg-red-50/30',
         appointment.status === 'checked_in' && 'bg-amber-50/30',
+        appointment.status === 'in_progress' && 'bg-emerald-50/40 ring-1 ring-emerald-200',
         selected && 'ring-2 ring-primary shadow-md',
         popIn && 'animate-[popIn_0.5s_ease-out]',
       )}
@@ -56,9 +59,14 @@ function AppointmentCard({
           {new Date(appointment.start_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
         </span>
       </div>
+      <Avatar className="h-11 w-11 border">
+        <AvatarImage src={petPhoto ?? undefined} alt={petName} />
+        <AvatarFallback className="bg-primary/10 text-primary">{petName[0]?.toUpperCase()}</AvatarFallback>
+      </Avatar>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span className="truncate font-semibold">{petName}</span>
+          <span className="text-xs text-muted-foreground">#{appointment.pet_id.slice(0, 6)}</span>
           {appointment.is_urgent && (
             <Badge variant="destructive" className="gap-1 px-1.5 py-0 text-[10px]">
               <AlertTriangle size={10} /> URGENT
@@ -83,11 +91,9 @@ function PatientEMR({
   onBack: () => void
   onRefresh: () => void
 }) {
-  const { petsApi } = useApi()
   const [records, setRecords] = useState<MedicalRecord[]>([])
   const [pet, setPet] = useState<Pet | null>(null)
   const [loading, setLoading] = useState(true)
-  const [actionLoading, setActionLoading] = useState<string | null>(null)
 
   const load = useCallback(() => {
     setLoading(true)
@@ -101,29 +107,6 @@ function PatientEMR({
   }, [petId])
 
   useEffect(() => { load() }, [load])
-
-  const { appointmentsApi } = useApi()
-  const handleStart = async () => {
-    if (!appointment) return
-    setActionLoading('start')
-    try {
-      await appointmentsApi.start(appointment.id)
-      toast.success('Appointment started')
-      onRefresh()
-    } catch { toast.error('Failed to start') }
-    finally { setActionLoading(null) }
-  }
-
-  const handleComplete = async () => {
-    if (!appointment) return
-    setActionLoading('complete')
-    try {
-      await appointmentsApi.complete(appointment.id)
-      toast.success('Appointment completed — Submit notes to finalize')
-      onRefresh()
-    } catch { toast.error('Failed to complete') }
-    finally { setActionLoading(null) }
-  }
 
   if (loading) return <Spinner className="py-20" />
 
@@ -146,7 +129,8 @@ function PatientEMR({
       <Card>
         <CardHeader>
           <div className="flex items-center gap-4">
-            <Avatar className="h-14 w-14">
+            <Avatar className="h-14 w-14 border">
+              <AvatarImage src={pet.photo_url ?? undefined} alt={pet.name} />
               <AvatarFallback className="bg-primary/10 text-lg text-primary">{pet.name[0].toUpperCase()}</AvatarFallback>
             </Avatar>
             <div className="flex-1">
@@ -156,18 +140,12 @@ function PatientEMR({
                 {pet.weight_kg ? ` · ${pet.weight_kg} kg` : ''}
               </CardDescription>
             </div>
-            <div className="flex gap-2">
-              {appointment?.status === 'checked_in' && (
-                <Button size="sm" onClick={handleStart} disabled={actionLoading === 'start'} className="gap-1.5">
-                  {actionLoading === 'start' ? <Loader2 size={14} className="animate-spin" /> : <PlayCircle size={14} />}
-                  Start Exam
-                </Button>
-              )}
-              {appointment?.status === 'in_progress' && (
-                <Button size="sm" variant="outline" onClick={handleComplete} disabled={actionLoading === 'complete'} className="gap-1.5">
-                  {actionLoading === 'complete' ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
-                  Complete
-                </Button>
+            <div className="flex items-center gap-2">
+              {appointment && (
+                <span className={cn('flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium', statusConfig[appointment.status]?.color || 'bg-muted text-muted-foreground')}>
+                  <span className={cn('h-1.5 w-1.5 rounded-full', statusConfig[appointment.status]?.dot || 'bg-muted-foreground')} />
+                  {statusConfig[appointment.status]?.label || appointment.status}
+                </span>
               )}
             </div>
           </div>
@@ -227,10 +205,10 @@ function PatientEMR({
 }
 
 export function VetDashboard() {
-  const { appointmentsApi, dashboardApi, petsApi } = useApi()
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [dashData, setDashData] = useState<VetDashboard>({ today_appointments: 0, pending_notes: 0, checked_in_patients: 0, urgent_cases: 0 })
   const [petNames, setPetNames] = useState<Record<string, string>>({})
+  const [petPhotos, setPetPhotos] = useState<Record<string, string | null>>({})
   const [checkedInIds, setCheckedInIds] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [selectedAppt, setSelectedAppt] = useState<Appointment | null>(null)
@@ -244,10 +222,16 @@ export function VetDashboard() {
         petsApi.list({}),
       ])
       const nameMap: Record<string, string> = {}
-      pets.forEach((p) => { nameMap[p.id] = p.name })
+      const photoMap: Record<string, string | null> = {}
+      pets.forEach((p) => { nameMap[p.id] = p.name; photoMap[p.id] = p.photo_url })
       setPetNames(nameMap)
+      setPetPhotos(photoMap)
       const prev = new Set(appointments.filter((a) => a.status === 'checked_in').map((a) => a.id))
+      const statusRank: Record<string, number> = { in_progress: 0, checked_in: 1, scheduled: 2, completed: 3, cancelled: 4 }
       const sorted = [...apps].sort((a, b) => {
+        const ra = statusRank[a.status] ?? 5
+        const rb = statusRank[b.status] ?? 5
+        if (ra !== rb) return ra - rb
         if (a.is_urgent !== b.is_urgent) return a.is_urgent ? -1 : 1
         return new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
       })
@@ -263,6 +247,20 @@ export function VetDashboard() {
 
   useEffect(() => { load() }, [load])
 
+  // Live updates: the vet's queue refreshes the moment staff checks a patient in.
+  useEffect(() => {
+    const ws = new WebSocket(WS_URL)
+    ws.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data)
+        if (msg.type === 'appointment.checked_in' || msg.type === 'appointment.completed' || msg.type === 'invoice.created') {
+          load()
+        }
+      } catch { /* ignore malformed frames */ }
+    }
+    return () => ws.close()
+  }, [load])
+
   const handleNoteSubmitted = () => {
     load()
     setSelectedAppt(null)
@@ -275,9 +273,17 @@ export function VetDashboard() {
   return (
     <div className="animate-in space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Good {new Date().getHours() < 12 ? 'morning' : 'afternoon'}, {user?.full_name?.split(' ')[0]}</h1>
-          <p className="text-muted-foreground">Today&apos;s patient overview</p>
+        <div className="flex items-center gap-3">
+          <Avatar className="h-11 w-11 border">
+            <AvatarImage src={user?.photo_url ?? undefined} alt={user?.full_name} />
+            <AvatarFallback className="bg-primary/10 text-primary">
+              {user?.full_name?.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)}
+            </AvatarFallback>
+          </Avatar>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Good {new Date().getHours() < 12 ? 'morning' : 'afternoon'}, {user?.full_name?.split(' ')[0]}</h1>
+            <p className="text-muted-foreground">Today&apos;s patient overview</p>
+          </div>
         </div>
         <Button variant="outline" size="sm" onClick={load} className="gap-1.5">
           <RefreshCw size={14} /> Refresh
@@ -327,8 +333,9 @@ export function VetDashboard() {
               <AppointmentCard
                 key={apt.id}
                 appointment={apt}
-                petName={petNames[apt.pet_id] || `Patient #${apt.pet_id.slice(0, 8)}`}
-                selected={selectedAppt?.id === apt.id}
+                petName={petNames[apt.pet_id] || 'Patient'}
+                petPhoto={petPhotos[apt.pet_id] ?? null}
+                selected={false}
                 popIn={checkedInIds.has(apt.id)}
                 onClick={() => setSelectedAppt(apt)}
               />
@@ -348,6 +355,7 @@ export function VetDashboard() {
         activePatientId={selectedAppt?.pet_id ?? null}
         activePatientName={selectedPetName}
         activeAppointmentId={selectedAppt?.id ?? null}
+        activeAppointmentReason={selectedAppt?.reason ?? null}
         onNoteSubmitted={handleNoteSubmitted}
       />
     </div>

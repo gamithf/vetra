@@ -1,44 +1,17 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
+from pathlib import Path
 from app.config import get_settings
 from app.api.v1.router import router as api_router
 from app.database import init_db
+from app.realtime import manager
 import json
 
+# reload-trigger marker (public booking endpoints)
+
 settings = get_settings()
-
-
-class ConnectionManager:
-    def __init__(self):
-        self.active_connections: dict[str, list[WebSocket]] = {}
-
-    async def connect(self, websocket: WebSocket, channel: str = "appointments"):
-        await websocket.accept()
-        if channel not in self.active_connections:
-            self.active_connections[channel] = []
-        self.active_connections[channel].append(websocket)
-
-    def disconnect(self, websocket: WebSocket, channel: str = "appointments"):
-        if channel in self.active_connections:
-            self.active_connections[channel].remove(websocket)
-            if not self.active_connections[channel]:
-                del self.active_connections[channel]
-
-    async def broadcast(self, message: dict, channel: str = "appointments"):
-        if channel not in self.active_connections:
-            return
-        stale = []
-        for ws in self.active_connections[channel]:
-            try:
-                await ws.send_json(message)
-            except Exception:
-                stale.append(ws)
-        for ws in stale:
-            self.disconnect(ws, channel)
-
-
-manager = ConnectionManager()
 
 
 @asynccontextmanager
@@ -62,6 +35,11 @@ app.add_middleware(
 )
 
 app.include_router(api_router)
+
+# Serve pet/placeholder asset SVGs stored in backend/scripts (e.g. dog & cat icons).
+_scripts_dir = Path(__file__).resolve().parent.parent / "scripts"
+if _scripts_dir.is_dir():
+    app.mount("/static/pets", StaticFiles(directory=_scripts_dir), name="pet-assets")
 
 
 @app.websocket("/ws")

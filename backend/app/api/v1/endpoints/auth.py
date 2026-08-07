@@ -52,6 +52,7 @@ async def register(
         full_name=body.full_name,
         role=body.role,
         phone=body.phone,
+        photo_url=body.photo_url,
     )
     session.add(user)
     await session.commit()

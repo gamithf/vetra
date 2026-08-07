@@ -1,35 +1,61 @@
 import { useState, useRef, useCallback } from 'react'
-import { Mic, MicOff, Send, Loader2, ChevronDown, X, Headphones, Sparkles } from 'lucide-react'
+import { Mic, MicOff, Send, Loader2, ChevronDown, X, Headphones } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { useApi } from '@/lib/use-api'
-import { isDemo, sleep } from '@/lib/demo'
-import { AgentPipeline } from '@/components/agent-pipeline'
+import { transcriptionApi } from '@/lib/api'
+import { DEMO_TRANSCRIPT } from '@/lib/constants'
+import { sleep, formatCurrency } from '@/lib/format'
+import { AgentStream, type AgentSummary } from '@/components/agent-stream'
 import { toast } from 'sonner'
 
 interface Props {
   activePatientId: string | null
   activePatientName?: string | null
   activeAppointmentId: string | null
+  activeAppointmentReason?: string | null
   onNoteSubmitted: () => void
 }
 
-const DEMO_TRANSCRIPT =
-  'Max is a 5-year-old male Golden Retriever here for his annual wellness exam. Owner reports he has been eating well and is active, with no concerns. Physical exam: temperature 101.2F, heart rate 80, respiratory rate 20. Eyes clear, ears clean, teeth show mild tartar. Heart and lungs auscultated normal. Abdomen soft. Recommended dental cleaning. DAPP vaccination updated.'
-
-export function CopilotWidget({ activePatientId, activePatientName, activeAppointmentId, onNoteSubmitted }: Props) {
-  const { clinicalNotesApi } = useApi()
+export function CopilotWidget({ activePatientId, activePatientName, activeAppointmentId, activeAppointmentReason, onNoteSubmitted }: Props) {
   const [expanded, setExpanded] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
+  const [isTranscribing, setIsTranscribing] = useState(false)
   const [transcript, setTranscript] = useState('')
-  const [submitting, setSubmitting] = useState(false)
-  const [pipelineOpen, setPipelineOpen] = useState(false)
+  const [agentOpen, setAgentOpen] = useState(false)
   const mediaRecorder = useRef<MediaRecorder | null>(null)
   const chunks = useRef<Blob[]>([])
-  const recordingTimer = useRef<number | null>(null)
 
-  const locked = activePatientId !== null
-  const demo = isDemo()
+  const locked = activePatientId !== null && activeAppointmentId !== null
+
+  const handleTranscribe = useCallback(async (blob: Blob) => {
+    setIsTranscribing(true)
+    try {
+      if (DEMO_TRANSCRIPT) {
+        // Deterministic demo: show the exact dictated message (the narrator
+        // reads this phrase aloud during the recording).
+        await sleep(1300)
+        setTranscript(DEMO_TRANSCRIPT)
+        toast.success('Transcription ready — review before submitting')
+      } else {
+        const res = await transcriptionApi.transcribe(blob)
+        if (res.text) {
+          setTranscript(res.text)
+          toast.success('Transcription ready — review before submitting')
+        } else {
+          toast.error('No speech detected')
+        }
+      }
+    } catch {
+      toast.error('Speech-to-text failed')
+    } finally {
+      setIsTranscribing(false)
+    }
+  }, [])
+
+  const stopRecording = useCallback(() => {
+    mediaRecorder.current?.stop()
+    setIsRecording(false)
+  }, [])
 
   const startRecording = useCallback(async () => {
     try {
@@ -38,80 +64,37 @@ export function CopilotWidget({ activePatientId, activePatientName, activeAppoin
       chunks.current = []
       recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.current.push(e.data) }
       recorder.onstop = () => {
+        const blob = new Blob(chunks.current, { type: 'audio/webm' })
         stream.getTracks().forEach((t) => t.stop())
+        handleTranscribe(blob)
       }
       recorder.start()
       mediaRecorder.current = recorder
       setIsRecording(true)
-
-      // In demo mode, auto-populate the transcript after ~4s of "recording"
-      if (demo) {
-        recordingTimer.current = window.setTimeout(() => {
-          stopRecording()
-          setTranscript(DEMO_TRANSCRIPT)
-          toast.success('Transcription ready — review before submitting')
-        }, 4000)
-      } else {
-        toast.info('Recording... Speak your findings')
-      }
+      toast.info('Recording... stop to transcribe')
     } catch {
       toast.error('Microphone access denied')
     }
-  }, [demo])
+  }, [handleTranscribe])
 
-  const stopRecording = () => {
-    mediaRecorder.current?.stop()
-    setIsRecording(false)
-    if (recordingTimer.current) {
-      clearTimeout(recordingTimer.current)
-      recordingTimer.current = null
-    }
-  }
-
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     if (!transcript.trim()) return toast.error('No notes to submit')
-    if (!activeAppointmentId) return toast.error('No active patient selected')
-
-    setSubmitting(true)
-    try {
-      if (demo) {
-        // Showcase the simulated multi-agent pipeline
-        setExpanded(false)
-        await sleep(250)
-        setPipelineOpen(true)
-      } else {
-        const res = await clinicalNotesApi.create({
-          pet_id: activePatientId!,
-          appointment_id: activeAppointmentId,
-          raw_transcript: transcript,
-        })
-        toast.success(res.message)
-        setTranscript('')
-        onNoteSubmitted()
-      }
-    } catch {
-      toast.error('Failed to submit notes')
-    } finally {
-      setSubmitting(false)
-    }
+    if (!activeAppointmentId || !activePatientId) return toast.error('No active patient selected')
+    setExpanded(false)
+    setAgentOpen(true)
   }
 
-  const handlePipelineComplete = async () => {
-    setPipelineOpen(false)
-    try {
-      const res = await clinicalNotesApi.create({
-        pet_id: activePatientId!,
-        appointment_id: activeAppointmentId,
-        raw_transcript: transcript,
-      })
-      toast.success(res.message)
-      toast('Inventory updated', { description: 'Supplies deducted for this visit' })
-      setTranscript('')
-      onNoteSubmitted()
-    } catch {
-      toast.error('Failed to submit notes')
+  const handleAgentDone = (summary: AgentSummary) => {
+    setAgentOpen(false)
+    toast.success('Visit complete — records, inventory & bill updated')
+    if (summary.invoice_total) {
+      toast('Bill generated', { description: formatCurrency(summary.invoice_total) })
     }
+    setTranscript('')
+    onNoteSubmitted()
   }
+
+  const busy = isRecording || isTranscribing
 
   return (
     <div className="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-2">
@@ -123,11 +106,6 @@ export function CopilotWidget({ activePatientId, activePatientName, activeAppoin
               AI Co-Pilot
             </div>
             <div className="flex items-center gap-1">
-              {demo && (
-                <span className="flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-medium text-violet-700">
-                  <Sparkles size={10} /> SIMULATED
-                </span>
-              )}
               {locked && (
                 <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
                   LOCKED
@@ -155,7 +133,7 @@ export function CopilotWidget({ activePatientId, activePatientName, activeAppoin
             </div>
 
             {isRecording && (
-              <div className="flex items-center justify-center gap-1 rounded-lg border border-primary/30 bg-primary/5 py-4">
+              <div className="flex items-center justify-center gap-2 rounded-lg border border-primary/30 bg-primary/5 py-4">
                 <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
                 <span className="text-xs font-medium text-primary">Listening...</span>
                 <div className="flex h-8 items-end gap-0.5">
@@ -163,20 +141,26 @@ export function CopilotWidget({ activePatientId, activePatientName, activeAppoin
                     <span
                       key={i}
                       className="w-1 animate-pulse rounded-full bg-primary"
-                      style={{
-                        height: `${10 + ((i * 7) % 25)}px`,
-                        animationDelay: `${i * 90}ms`,
-                      }}
+                      style={{ height: `${10 + ((i * 7) % 25)}px`, animationDelay: `${i * 90}ms` }}
                     />
                   ))}
                 </div>
               </div>
             )}
 
+            {isTranscribing && (
+              <div className="flex items-center justify-center gap-2 rounded-lg border border-violet-200 bg-violet-50 py-3">
+                <Loader2 size={16} className="animate-spin text-violet-600" />
+                <span className="text-xs font-medium text-violet-700">Converting speech to text...</span>
+              </div>
+            )}
+
             <textarea
-              className="flex min-h-[100px] w-full rounded-lg border border-input bg-background p-3 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              placeholder={isRecording ? 'Recording...' : 'Type or dictate your clinical notes...'}
+              className="flex min-h-[100px] w-full rounded-lg border border-input bg-background p-3 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+              placeholder={busy ? (isRecording ? 'Recording... edit disabled' : 'Converting...') : 'Type or dictate your clinical notes...'}
               value={transcript}
+              readOnly={busy}
+              disabled={busy}
               onChange={(e) => setTranscript(e.target.value)}
             />
 
@@ -185,6 +169,7 @@ export function CopilotWidget({ activePatientId, activePatientName, activeAppoin
                 variant={isRecording ? 'destructive' : 'secondary'}
                 size="sm"
                 onClick={isRecording ? stopRecording : startRecording}
+                disabled={isTranscribing}
                 className="gap-1.5"
               >
                 {isRecording ? <MicOff size={14} /> : <Mic size={14} />}
@@ -194,9 +179,9 @@ export function CopilotWidget({ activePatientId, activePatientName, activeAppoin
                 size="sm"
                 className="flex-1 gap-1.5"
                 onClick={handleSubmit}
-                disabled={submitting || !locked || !transcript.trim()}
+                disabled={busy || !locked || !transcript.trim()}
               >
-                {submitting ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                <Send size={14} />
                 Submit
               </Button>
             </div>
@@ -207,7 +192,7 @@ export function CopilotWidget({ activePatientId, activePatientName, activeAppoin
       <button
         onClick={() => setExpanded(!expanded)}
         className={cn(
-          'flex items-center gap-2 rounded-full px-5 py-3 text-sm font-medium shadow-lg transition-all',
+          'flex items-center gap-2 rounded-full px-5 py-3 text-sm font-medium shadow-lg transition-all cursor-pointer',
           activePatientId ? 'bg-primary text-primary-foreground hover:opacity-90' : 'bg-muted text-muted-foreground hover:bg-accent',
           expanded && 'shadow-none',
         )}
@@ -217,10 +202,14 @@ export function CopilotWidget({ activePatientId, activePatientName, activeAppoin
         {!expanded && activePatientId && <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />}
       </button>
 
-      <AgentPipeline
-        open={pipelineOpen}
-        onComplete={handlePipelineComplete}
-        patientName={activePatientName || undefined}
+      <AgentStream
+        open={agentOpen}
+        onClose={() => setAgentOpen(false)}
+        onDone={handleAgentDone}
+        transcript={transcript}
+        petId={activePatientId || ''}
+        appointmentId={activeAppointmentId || ''}
+        appointmentReason={activeAppointmentReason}
       />
     </div>
   )

@@ -9,6 +9,7 @@ import { LoginPage } from '@/pages/login'
 import { RegisterPage } from '@/pages/register'
 import { VetDashboard } from '@/pages/vet-dashboard'
 import { StaffDashboard } from '@/pages/staff-dashboard'
+import { PublicPetPage } from '@/pages/public-pet'
 
 const queryClient = new QueryClient()
 
@@ -21,6 +22,7 @@ function App() {
             <Route path="/landing" element={<LandingPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
+            <Route path="/p/:token" element={<PublicPetPage />} />
             <Route path="/" element={<RoleRedirect />} />
             <Route
               path="/vet-dashboard"

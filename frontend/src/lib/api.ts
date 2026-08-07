@@ -34,6 +34,7 @@ export interface User {
   full_name: string
   role: 'vet' | 'staff' | 'admin'
   phone: string | null
+  photo_url: string | null
   is_active: boolean
   created_at: string
 }
@@ -164,8 +165,6 @@ export interface ClinicalNote {
 
 export interface SubmitNoteResponse {
   note: ClinicalNote
-  appointment_status: string
-  medical_record_id: string | null
   message: string
 }
 
@@ -263,15 +262,112 @@ export const invoicesApi = {
   pay: (id: string, data: { payment_method: string }) =>
     api.post<Invoice>(`/invoices/${id}/pay`, data).then(r => r.data),
   get: (id: string) => api.get<InvoiceWithItems>(`/invoices/${id}`).then(r => r.data),
+  getByAppointment: (appointmentId: string) =>
+    api.get<InvoiceWithItems>(`/invoices/by-appointment/${appointmentId}`).then(r => r.data),
 }
 
-export const realApi = {
-  authApi,
-  ownersApi,
-  petsApi,
-  appointmentsApi,
-  clinicalNotesApi,
-  inventoryApi,
-  dashboardApi,
-  invoicesApi,
+export const transcriptionApi = {
+  transcribe: async (blob: Blob) => {
+    const form = new FormData()
+    form.append('file', blob, 'recording.webm')
+    const { data } = await api.post<{ text: string; model: string }>('/transcribe', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    return data
+  },
+}
+
+// ── Public magic-link API (no auth, no redirect) ──────────
+// Origin-relative: the magic-link page is served from whatever host the owner
+// opens (dev server, Cloudflare tunnel, ...), so its API calls must hit that
+// same origin. Vite proxies /api -> the backend during development.
+const publicApiClient = axios.create({
+  baseURL: API_PREFIX,
+  headers: { 'Content-Type': 'application/json' },
+})
+
+export interface PublicPetView {
+  pet: {
+    id: string
+    name: string
+    species: string
+    breed: string | null
+    gender: string
+    color: string | null
+    date_of_birth: string | null
+    weight_kg: number | null
+    microchip_id: string | null
+  }
+  owner: { first_name: string; last_name: string } | null
+  appointment: {
+    id: string | null
+    reason: string | null
+    start_time: string | null
+    status: string | null
+  }
+  invoice: {
+    id: string | null
+    total_amount: number | null
+    status: string | null
+    items: { description: string; quantity: number; unit_price: number; total_price: number }[]
+  } | null
+  recent_records: {
+    record_type: string
+    diagnosis: string | null
+    treatment: string | null
+    recorded_at: string | null
+  }[]
+}
+
+export const publicApi = {
+  pet: (token: string) =>
+    publicApiClient.get<PublicPetView>(`/public/pet/${token}`).then((r) => r.data),
+  portal: (token: string) =>
+    publicApiClient.get<PublicPortal>(`/public/portal/${token}`).then((r) => r.data),
+  slots: (token: string, vetId: string, date: string) =>
+    publicApiClient.get<PublicSlots>(`/public/slots/${token}/${vetId}/${date}`).then((r) => r.data),
+  createAppointment: (token: string, payload: PublicBookingPayload) =>
+    publicApiClient.post<PublicAppointment>(`/public/appointments?token=${token}`, payload).then((r) => r.data),
+  updateAppointment: (token: string, appointmentId: string, payload: PublicBookingPayload) =>
+    publicApiClient.patch<PublicAppointment>(`/public/appointments/${appointmentId}?token=${token}`, payload).then((r) => r.data),
+}
+
+export interface PublicPetInfo {
+  id: string
+  name: string
+  species: string
+  breed: string | null
+  photo_url: string | null
+  primary_vet_id: string | null
+  primary_vet_name: string | null
+}
+
+export interface PublicAppointment {
+  id: string
+  pet_id: string
+  pet_name: string
+  vet_id: string | null
+  vet_name: string | null
+  reason: string | null
+  start_time: string
+  end_time: string
+  status: string
+}
+
+export interface PublicPortal {
+  owner: { first_name: string; last_name: string }
+  pets: PublicPetInfo[]
+  appointments: PublicAppointment[]
+}
+
+export interface PublicSlots {
+  date: string
+  slots: string[]
+}
+
+export interface PublicBookingPayload {
+  pet_id: string
+  vet_id?: string | null
+  start_time: string
+  reason?: string | null
 }

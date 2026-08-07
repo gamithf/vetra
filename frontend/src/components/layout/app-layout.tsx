@@ -14,7 +14,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { useState } from 'react'
 
 interface NavItem {
@@ -77,7 +77,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
                 key={item.href}
                 onClick={() => navigate(item.href)}
                 className={cn(
-                  'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200',
+                  'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 cursor-pointer',
                   isActive
                     ? 'bg-primary/10 text-primary'
                     : 'text-muted-foreground hover:bg-muted hover:text-foreground',
@@ -98,6 +98,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
         <div className="border-t p-3">
           <div className="flex items-center gap-3 rounded-lg px-3 py-2.5">
             <Avatar className="h-8 w-8">
+              <AvatarImage src={user?.photo_url ?? undefined} alt={user?.full_name} />
               <AvatarFallback className="bg-primary/10 text-primary text-xs">
                 {initials}
               </AvatarFallback>

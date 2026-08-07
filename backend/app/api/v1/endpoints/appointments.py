@@ -6,6 +6,7 @@ from sqlmodel import select
 from app.database import get_session
 from app.api.deps import get_current_user
 from app.core.exceptions import NotFoundError, BadRequestError
+from app.realtime import manager
 from app.models.appointment import Appointment, AppointmentStatus
 from app.models.user import User
 from app.models.invoice import Invoice, InvoiceStatus
@@ -76,6 +77,27 @@ async def get_today_appointments(
         .order_by(Appointment.start_time.asc())
     )
     result = await session.execute(query)
+    appointments = result.scalars().all()
+    return [AppointmentResponse.model_validate(a) for a in appointments]
+
+
+@router.get("/pending-checkout", response_model=list[AppointmentResponse])
+async def pending_checkout(
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    # Completed visits that still need payment: either no invoice yet, or an
+    # invoice that is pending / partially paid.
+    subquery = select(Invoice.appointment_id).where(
+        Invoice.appointment_id.isnot(None),
+        Invoice.status.in_([InvoiceStatus.PAID, InvoiceStatus.CANCELLED, InvoiceStatus.REFUNDED]),
+    )
+    result = await session.execute(
+        select(Appointment)
+        .where(Appointment.status == AppointmentStatus.COMPLETED)
+        .where(Appointment.id.notin_(subquery))
+        .order_by(Appointment.end_time.desc())
+    )
     appointments = result.scalars().all()
     return [AppointmentResponse.model_validate(a) for a in appointments]
 
@@ -176,6 +198,7 @@ async def check_in_appointment(
     session.add(appointment)
     await session.commit()
     await session.refresh(appointment)
+    await manager.broadcast({"type": "appointment.checked_in", "appointment_id": str(appointment.id)})
     return AppointmentResponse.model_validate(appointment)
 
 
@@ -239,6 +262,7 @@ async def start_appointment(
     session.add(appointment)
     await session.commit()
     await session.refresh(appointment)
+    await manager.broadcast({"type": "appointment.started", "appointment_id": str(appointment.id)})
     return AppointmentResponse.model_validate(appointment)
 
 
@@ -258,28 +282,80 @@ async def complete_appointment(
     session.add(appointment)
     await session.commit()
     await session.refresh(appointment)
+    await manager.broadcast({"type": "appointment.completed", "appointment_id": str(appointment.id)})
     return AppointmentResponse.model_validate(appointment)
 
 
-@router.get("/pending-checkout", response_model=list[AppointmentResponse])
-async def pending_checkout(
+class InvoiceItemPayload(BaseModel):
+    description: str
+    quantity: int = 1
+    unit_price: float
+
+
+class CreateInvoicePayload(BaseModel):
+    items: list[InvoiceItemPayload] | None = None
+
+
+class FollowupPayload(BaseModel):
+    appointment_id: uuid.UUID
+    days: int = 7
+
+
+@router.post("/followup", response_model=AppointmentResponse, status_code=201)
+async def schedule_followup_appointment(
+    body: FollowupPayload,
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    subquery = select(Invoice.appointment_id).where(Invoice.appointment_id.isnot(None))
-    result = await session.execute(
+    """Create a follow-up appointment in `days` days from a completed visit.
+
+    Idempotent: if a future follow-up already exists for the pet it is returned
+    instead of creating a duplicate (safe to call on pipeline re-runs).
+    """
+    src = await session.get(Appointment, body.appointment_id)
+    if not src:
+        raise NotFoundError("Appointment not found")
+    if not src.vet_id:
+        raise BadRequestError("Source appointment has no assigned veterinarian")
+
+    existing_result = await session.execute(
         select(Appointment)
-        .where(Appointment.status == AppointmentStatus.COMPLETED)
-        .where(Appointment.id.notin_(subquery))
-        .order_by(Appointment.end_time.desc())
+        .where(Appointment.pet_id == src.pet_id)
+        .where(Appointment.status == AppointmentStatus.SCHEDULED)
+        .where(Appointment.reason.ilike("Follow-up%"))
+        .where(Appointment.start_time > datetime.now(timezone.utc))
+        .order_by(Appointment.start_time.desc())
+        .limit(1)
     )
-    appointments = result.scalars().all()
-    return [AppointmentResponse.model_validate(a) for a in appointments]
+    existing = existing_result.scalar_one_or_none()
+    if existing:
+        return AppointmentResponse.model_validate(existing)
+
+    from app.services.scheduling import schedule_followup
+
+    follow = await schedule_followup(
+        session,
+        src.pet_id,
+        src.owner_id,
+        src.vet_id,
+        body.days,
+        reason="Follow-up visit",
+        notes="Auto-scheduled follow-up from AI visit summary",
+    )
+    await session.commit()
+    await session.refresh(follow)
+    await manager.broadcast({
+        "type": "appointment.created",
+        "appointment_id": str(follow.id),
+        "pet_id": str(follow.pet_id),
+    })
+    return AppointmentResponse.model_validate(follow)
 
 
 @router.post("/{appointment_id}/create-invoice", response_model=InvoiceWithItemsResponse)
 async def create_invoice_for_appointment(
     appointment_id: uuid.UUID,
+    body: CreateInvoicePayload | None = None,
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
@@ -309,13 +385,15 @@ async def create_invoice_for_appointment(
     session.add(invoice)
     await session.flush()
 
-    default_items = [
-        {"description": "Consultation Fee", "quantity": 1, "unit_price": 45.00},
-        {"description": "Examination Fee", "quantity": 1, "unit_price": 35.00},
-    ]
-
-    if appointment.is_urgent:
-        default_items.append({"description": "Emergency Surcharge", "quantity": 1, "unit_price": 50.00})
+    if body and body.items:
+        default_items = [item.model_dump() for item in body.items]
+    else:
+        default_items = [
+            {"description": "Consultation Fee", "quantity": 1, "unit_price": 45.00},
+            {"description": "Examination Fee", "quantity": 1, "unit_price": 35.00},
+        ]
+        if appointment.is_urgent:
+            default_items.append({"description": "Emergency Surcharge", "quantity": 1, "unit_price": 50.00})
 
     total = 0
     items = []
@@ -334,6 +412,13 @@ async def create_invoice_for_appointment(
     session.add(invoice)
     await session.commit()
     await session.refresh(invoice)
+
+    await manager.broadcast({
+        "type": "invoice.created",
+        "appointment_id": str(invoice.appointment_id),
+        "invoice_id": str(invoice.id),
+        "total_amount": invoice.total_amount,
+    })
 
     resp = InvoiceWithItemsResponse(
         id=invoice.id,
