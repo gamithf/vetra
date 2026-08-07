@@ -122,11 +122,11 @@ async def seed(session: AsyncSession):
         {"owner_id": owners[0].id, "name": "Luna",      "species": PetSpecies.CAT,     "breed": "Siamese",          "gender": PetGender.FEMALE, "date_of_birth": date(2021, 7, 22),  "weight_kg": 4.2,  "color": "Cream",      "microchip_id": "MC-10002"},
         {"owner_id": owners[1].id, "name": "Cooper",    "species": PetSpecies.DOG,     "breed": "Labrador Retriever","gender": PetGender.MALE,   "date_of_birth": date(2019, 11, 5),  "weight_kg": 28.0, "color": "Chocolate",  "microchip_id": "MC-10003"},
         {"owner_id": owners[2].id, "name": "Bella",     "species": PetSpecies.CAT,     "breed": "Siamese",           "gender": PetGender.FEMALE, "date_of_birth": date(2021, 5, 18),  "weight_kg": 12.8, "color": "Tricolor",   "microchip_id": "MC-10005"},
-        {"owner_id": owners[2].id, "name": "Rocky",     "species": PetSpecies.RABBIT,  "breed": "Holland Lop",      "gender": PetGender.MALE,   "date_of_birth": date(2023, 2, 28),  "weight_kg": 1.8,  "color": "White",      "microchip_id": None},
+        {"owner_id": owners[2].id, "name": "Rocky",     "species": PetSpecies.DOG,  "breed": "Holland Lop",      "gender": PetGender.MALE,   "date_of_birth": date(2023, 2, 28),  "weight_kg": 1.8,  "color": "White",      "microchip_id": None},
         {"owner_id": owners[3].id, "name": "Daisy",     "species": PetSpecies.DOG,     "breed": "Cocker Spaniel",   "gender": PetGender.FEMALE, "date_of_birth": date(2020, 9, 3),   "weight_kg": 14.2, "color": "Golden",     "microchip_id": "MC-10006"},
         {"owner_id": owners[3].id, "name": "Milo",      "species": PetSpecies.CAT,     "breed": "Persian",          "gender": PetGender.MALE,   "date_of_birth": date(2022, 6, 14),  "weight_kg": 5.0,  "color": "White",      "microchip_id": "MC-10007"},
         {"owner_id": owners[4].id, "name": "Buddy",     "species": PetSpecies.DOG,     "breed": "German Shepherd",  "gender": PetGender.MALE,   "date_of_birth": date(2018, 4, 20),  "weight_kg": 35.0, "color": "Black & Tan", "microchip_id": "MC-10008"},
-        {"owner_id": owners[4].id, "name": "Coco",      "species": PetSpecies.BIRD,    "breed": "Cockatiel",        "gender": PetGender.FEMALE, "date_of_birth": date(2023, 8, 1),   "weight_kg": 0.09, "color": "Grey",       "microchip_id": None},
+        {"owner_id": owners[4].id, "name": "Coco",      "species": PetSpecies.CAT,    "breed": "Persian",        "gender": PetGender.FEMALE, "date_of_birth": date(2023, 8, 1),   "weight_kg": 0.09, "color": "Grey",       "microchip_id": None},
         {"owner_id": owners[5].id, "name": "Bailey",    "species": PetSpecies.DOG,     "breed": "Poodle",           "gender": PetGender.FEMALE, "date_of_birth": date(2021, 12, 12), "weight_kg": 8.5,  "color": "White",      "microchip_id": "MC-10009"},
         {"owner_id": owners[5].id, "name": "Oliver",    "species": PetSpecies.CAT,     "breed": "Bengal",           "gender": PetGender.MALE,   "date_of_birth": date(2022, 10, 5),  "weight_kg": 5.5,  "color": "Spotted",    "microchip_id": "MC-10010"},
         {"owner_id": owners[6].id, "name": "Lily",      "species": PetSpecies.DOG,     "breed": "Shih Tzu",         "gender": PetGender.FEMALE, "date_of_birth": date(2023, 3, 8),   "weight_kg": 6.2,  "color": "Brown",      "microchip_id": "MC-10011"},
@@ -165,12 +165,12 @@ async def seed(session: AsyncSession):
         {"pet_id": pets[6].id,  "vet_id": vet1.id, "owner_id": owners[3].id, "room_id": rooms[2].id, "start_time": today.replace(hour=14, minute=0),  "end_time": today.replace(hour=14, minute=30), "status": AppointmentStatus.SCHEDULED,     "reason": "Follow-up ear infection",        "is_urgent": False},
         {"pet_id": pets[1].id,  "vet_id": vet2.id, "owner_id": owners[0].id, "room_id": rooms[1].id, "start_time": today.replace(hour=14, minute=30), "end_time": today.replace(hour=15, minute=0),  "status": AppointmentStatus.SCHEDULED,     "reason": "Urinary tract symptoms",         "is_urgent": True},
         # Past appointments
-        {"pet_id": pets[0].id,  "vet_id": vet1.id, "owner_id": owners[0].id, "room_id": rooms[0].id, "start_time": today.replace(hour=0, minute=0) - timedelta(days=30, hours=9),  "end_time": today.replace(hour=0, minute=0) - timedelta(days=30, hours=9, minutes=-30), "status": AppointmentStatus.COMPLETED, "reason": "Annual checkup", "is_urgent": False},
-        {"pet_id": pets[4].id,  "vet_id": vet2.id, "owner_id": owners[2].id, "room_id": rooms[1].id, "start_time": today.replace(hour=0, minute=0) - timedelta(days=14, hours=10), "end_time": today.replace(hour=0, minute=0) - timedelta(days=14, hours=10, minutes=-30), "status": AppointmentStatus.COMPLETED, "reason": "Allergy consult", "is_urgent": False},
-        {"pet_id": pets[8].id,  "vet_id": vet1.id, "owner_id": owners[4].id, "room_id": rooms[2].id, "start_time": today.replace(hour=0, minute=0) - timedelta(days=7, hours=11),  "end_time": today.replace(hour=0, minute=0) - timedelta(days=7, hours=11, minutes=-30),  "status": AppointmentStatus.COMPLETED, "reason": "Vaccination", "is_urgent": False},
-        {"pet_id": pets[14].id, "vet_id": vet3.id, "owner_id": owners[7].id, "room_id": rooms[0].id, "start_time": today.replace(hour=0, minute=0) - timedelta(days=3, hours=15),   "end_time": today.replace(hour=0, minute=0) - timedelta(days=3, hours=15, minutes=-30),   "status": AppointmentStatus.COMPLETED, "reason": "Eye infection", "is_urgent": False},
+        {"pet_id": pets[0].id,  "vet_id": vet1.id, "owner_id": owners[0].id, "room_id": rooms[0].id, "start_time": today.replace(hour=0, minute=0) - timedelta(days=30, hours=9),  "end_time": today.replace(hour=0, minute=0) - timedelta(days=30, hours=9, minutes=-30), "status": AppointmentStatus.SCHEDULED, "reason": "Annual checkup", "is_urgent": False},
+        {"pet_id": pets[4].id,  "vet_id": vet2.id, "owner_id": owners[2].id, "room_id": rooms[1].id, "start_time": today.replace(hour=0, minute=0) - timedelta(days=14, hours=10), "end_time": today.replace(hour=0, minute=0) - timedelta(days=14, hours=10, minutes=-30), "status": AppointmentStatus.SCHEDULED, "reason": "Allergy consult", "is_urgent": False},
+        {"pet_id": pets[8].id,  "vet_id": vet1.id, "owner_id": owners[4].id, "room_id": rooms[2].id, "start_time": today.replace(hour=0, minute=0) - timedelta(days=7, hours=11),  "end_time": today.replace(hour=0, minute=0) - timedelta(days=7, hours=11, minutes=-30),  "status": AppointmentStatus.SCHEDULED, "reason": "Vaccination", "is_urgent": False},
+        {"pet_id": pets[14].id, "vet_id": vet3.id, "owner_id": owners[7].id, "room_id": rooms[0].id, "start_time": today.replace(hour=0, minute=0) - timedelta(days=3, hours=15),   "end_time": today.replace(hour=0, minute=0) - timedelta(days=3, hours=15, minutes=-30),   "status": AppointmentStatus.SCHEDULED, "reason": "Eye infection", "is_urgent": False},
         # Future appointments
-        {"pet_id": pets[3].id,  "vet_id": vet1.id, "owner_id": owners[1].id, "room_id": rooms[0].id, "start_time": today.replace(hour=0, minute=0) + timedelta(days=1, hours=9),   "end_time": today.replace(hour=0, minute=0) + timedelta(days=1, hours=9, minutes=30),   "status": AppointmentStatus.SCHEDULED,  "reason": "wellness exam", "is_urgent": False},
+        {"pet_id": pets[3].id,  "vet_id": vet1.id, "owner_id": owners[2].id, "room_id": rooms[0].id, "start_time": today.replace(hour=0, minute=0) + timedelta(days=1, hours=9),   "end_time": today.replace(hour=0, minute=0) + timedelta(days=1, hours=9, minutes=30),   "status": AppointmentStatus.SCHEDULED,  "reason": "wellness exam", "is_urgent": False},
         {"pet_id": pets[6].id,  "vet_id": vet2.id, "owner_id": owners[3].id, "room_id": rooms[1].id, "start_time": today.replace(hour=0, minute=0) + timedelta(days=2, hours=10),   "end_time": today.replace(hour=0, minute=0) + timedelta(days=2, hours=10, minutes=30),   "status": AppointmentStatus.SCHEDULED,  "reason": "grooming + nail trim", "is_urgent": False},
     ]
     appointments = [Appointment(**a) for a in appointments_data]
@@ -291,36 +291,31 @@ async def seed(session: AsyncSession):
     print(f"  ✓ {len(inventory_items)} inventory items")
 
     # ── Invoices (LKR) ──────────────────────
-    invoices_data = [
-        {"appointment_id": appointments[9].id,  "owner_id": owners[0].id, "pet_id": pets[0].id,  "total_amount": 1800.00, "paid_amount": 1800.00, "status": InvoiceStatus.PAID,        "payment_method": PaymentMethod.CREDIT_CARD, "paid_at": dt(-30)},
-        {"appointment_id": appointments[10].id, "owner_id": owners[2].id, "pet_id": pets[4].id,  "total_amount": 3700.00, "paid_amount": 3700.00, "status": InvoiceStatus.PAID,        "payment_method": PaymentMethod.CASH,         "paid_at": dt(-14)},
-        {"appointment_id": appointments[11].id, "owner_id": owners[4].id, "pet_id": pets[8].id,  "total_amount": 1300.00, "paid_amount": 1300.00, "status": InvoiceStatus.PAID,        "payment_method": PaymentMethod.DEBIT_CARD,   "paid_at": dt(-7)},
-    ]
-    invoices = [Invoice(**i) for i in invoices_data]
-    session.add_all(invoices)
-    await session.flush()
-    print(f"  ✓ {len(invoices)} invoices")
+    # invoices_data = [
+    #     {"appointment_id": appointments[9].id,  "owner_id": owners[0].id, "pet_id": pets[0].id,  "total_amount": 1800.00, "paid_amount": 1800.00, "status": InvoiceStatus.PAID,        "payment_method": PaymentMethod.CREDIT_CARD, "paid_at": dt(-30)},
+    #     {"appointment_id": appointments[10].id, "owner_id": owners[2].id, "pet_id": pets[4].id,  "total_amount": 3700.00, "paid_amount": 3700.00, "status": InvoiceStatus.PAID,        "payment_method": PaymentMethod.CASH,         "paid_at": dt(-14)},
+    #     {"appointment_id": appointments[11].id, "owner_id": owners[4].id, "pet_id": pets[8].id,  "total_amount": 1300.00, "paid_amount": 1300.00, "status": InvoiceStatus.PAID,        "payment_method": PaymentMethod.DEBIT_CARD,   "paid_at": dt(-7)},
+    # ]
+    # invoices = [Invoice(**i) for i in invoices_data]
+    # session.add_all(invoices)
+    # await session.flush()
+    # print(f"  ✓ {len(invoices)} invoices")
 
-    # ── Invoice Items ──────────────────────
-    invoice_items_data = [
-        {"invoice_id": invoices[0].id, "description": "Annual Wellness Exam",                    "quantity": 1, "unit_price": 500.00, "total_price": 500.00},
-        {"invoice_id": invoices[0].id, "description": "DAPP Vaccine",                            "quantity": 1, "unit_price": 900.00, "total_price": 900.00},
-        {"invoice_id": invoices[0].id, "description": "Office Visit Fee",                        "quantity": 1, "unit_price": 400.00, "total_price": 400.00},
-        {"invoice_id": invoices[1].id, "description": "Allergy Consultation",                    "quantity": 1, "unit_price": 2200.00, "total_price": 2200.00},
-        {"invoice_id": invoices[1].id, "description": "Apoquel 5.4mg (14 tablets)",             "quantity": 1, "unit_price": 1200.00, "total_price": 1200.00},
-        {"invoice_id": invoices[1].id, "description": "Office Visit Fee",                        "quantity": 1, "unit_price": 300.00, "total_price": 300.00},
-        {"invoice_id": invoices[2].id, "description": "Rabies Vaccination",                      "quantity": 1, "unit_price": 800.00, "total_price": 800.00},
-        {"invoice_id": invoices[2].id, "description": "Office Visit Fee",                        "quantity": 1, "unit_price": 500.00, "total_price": 500.00},
-        {"invoice_id": invoices[3].id, "description": "Patellar Luxation Surgery",               "quantity": 1, "unit_price": 15000.00, "total_price": 15000.00},
-        {"invoice_id": invoices[3].id, "description": "General Anesthesia",                      "quantity": 1, "unit_price": 5000.00, "total_price": 5000.00},
-        {"invoice_id": invoices[4].id, "description": "Skin Scrape Cytology",                    "quantity": 1, "unit_price": 800.00,  "total_price": 800.00},
-        {"invoice_id": invoices[4].id, "description": "Antibiotic Course (Cephalexin)",          "quantity": 1, "unit_price": 1200.00, "total_price": 1200.00},
-        {"invoice_id": invoices[4].id, "description": "Office Visit Fee",                        "quantity": 1, "unit_price": 500.00,  "total_price": 500.00},
-    ]
-    invoice_items = [InvoiceItem(**i) for i in invoice_items_data]
-    session.add_all(invoice_items)
-    await session.flush()
-    print(f"  ✓ {len(invoice_items)} invoice items")
+    # # ── Invoice Items ──────────────────────
+    # invoice_items_data = [
+    #     {"invoice_id": invoices[0].id, "description": "Annual Wellness Exam",                    "quantity": 1, "unit_price": 500.00, "total_price": 500.00},
+    #     {"invoice_id": invoices[0].id, "description": "DAPP Vaccine",                            "quantity": 1, "unit_price": 900.00, "total_price": 900.00},
+    #     {"invoice_id": invoices[0].id, "description": "Office Visit Fee",                        "quantity": 1, "unit_price": 400.00, "total_price": 400.00},
+    #     {"invoice_id": invoices[1].id, "description": "Allergy Consultation",                    "quantity": 1, "unit_price": 2200.00, "total_price": 2200.00},
+    #     {"invoice_id": invoices[1].id, "description": "Apoquel 5.4mg (14 tablets)",             "quantity": 1, "unit_price": 1200.00, "total_price": 1200.00},
+    #     {"invoice_id": invoices[1].id, "description": "Office Visit Fee",                        "quantity": 1, "unit_price": 300.00, "total_price": 300.00},
+    #     {"invoice_id": invoices[2].id, "description": "Rabies Vaccination",                      "quantity": 1, "unit_price": 800.00, "total_price": 800.00},
+    #     {"invoice_id": invoices[2].id, "description": "Office Visit Fee",                        "quantity": 1, "unit_price": 500.00, "total_price": 500.00},
+    # ]
+    # invoice_items = [InvoiceItem(**i) for i in invoice_items_data]
+    # session.add_all(invoice_items)
+    # await session.flush()
+    # print(f"  ✓ {len(invoice_items)} invoice items")
 
     # ── Weight Records ─────────────────────
     weight_records_data = [
@@ -356,7 +351,7 @@ async def seed(session: AsyncSession):
     print()
     print(f"  Today's appointments: {sum(1 for a in appointments_data if a['start_time'].date() == today.date())}")
     print(f"  Low-stock items: {sum(1 for i in inventory_data if i['quantity'] < i['min_quantity'])}")
-    print(f"  Pending invoices: {sum(1 for i in invoices_data if i['status'] == InvoiceStatus.PENDING)}")
+    # print(f"  Pending invoices: {sum(1 for i in invoices_data if i['status'] == InvoiceStatus.PENDING)}")
     print()
 
 
